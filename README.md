@@ -14,14 +14,13 @@ combat simultané).
 
 ## Mettre en ligne
 
-Le dépôt contient un workflow GitHub Actions qui construit et publie le jeu à
-chaque poussée. Il active Pages de lui-même : aucun réglage préalable n'est
-nécessaire.
+Le dépôt contient un workflow GitHub Actions qui teste, construit et publie le
+jeu à chaque poussée. Deux réglages sont à faire une fois, et **seulement à la
+main** — le jeton des workflows peut déployer sur Pages, mais pas créer le site :
 
-**Une limite vient de GitHub, pas du projet :** Pages n'est disponible sur un
-dépôt *privé* qu'avec un plan payant (Pro, Team ou Enterprise). Sur un compte
-gratuit, il faut donc rendre le dépôt public — Réglages → tout en bas →
-*Change repository visibility* — pour que la mise en ligne aboutisse.
+1. **Rendre le dépôt public** (Réglages → tout en bas → *Change repository
+   visibility*). Pages n'est servi depuis un dépôt privé qu'avec un plan payant.
+2. **Réglages → Pages → Source : GitHub Actions.**
 
 Le jeu est alors publié sur `https://<compte>.github.io/TCG-INVENTO/`, et c'est
 cette adresse qu'il faut ouvrir dans Safari pour l'ajouter à l'écran d'accueil.
