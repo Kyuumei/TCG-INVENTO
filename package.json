@@ -1,0 +1,25 @@
+{
+  "name": "invento-tcg",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "INVENTO — jeu de cartes à collectionner mobile (PWA iOS)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "art": "node tools/genart.mjs",
+    "art:ai": "node tools/genart-ai.mjs",
+    "bundle": "node tools/bundle-artifact.mjs",
+    "check": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "playwright": "^1.62.1",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.34.5",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.14"
+  }
+}

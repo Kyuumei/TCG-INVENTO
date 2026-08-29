@@ -1,0 +1,614 @@
+/* ==========================================================================
+   INVENTO — feuille de style
+   --------------------------------------------------------------------------
+   Organisation :
+     1. Jetons de conception et remise à zéro
+     2. Coque d'application (plein écran iOS, encoche, barre du bas)
+     3. La carte : bord, cadre, illustration, encart de règles, médaillons
+     4. Le plateau : lignes, jetons de créature, main en éventail
+     5. Écrans : accueil, campagne, collection, constructeur, boosters
+     6. Animations
+   ========================================================================== */
+
+/* --- 1. Jetons de conception --------------------------------------------- */
+
+:root {
+  --fond: #0a0c11;
+  --fond-2: #10141c;
+  --panneau: #171c26;
+  --panneau-2: #1f2632;
+  --bord: #2c3442;
+  --texte: #e9e5da;
+  --texte-attenue: #98a0af;
+  --or: #d7b463;
+  --or-sombre: #8e7333;
+  --parchemin: #ece3cd;
+  --parchemin-2: #ddd1b4;
+  --encre: #2a2317;
+  --danger: #d9534f;
+  --succes: #6fbf73;
+
+  --sylve: #6fae4e;
+  --flamme: #e2622a;
+  --maree: #3fa5c8;
+  --foudre: #9a86ff;
+  --roc: #c2a06a;
+  --ombre: #9364c8;
+  --neutre: #9c9689;
+
+  --rayon: 14px;
+  --ombre-portee: 0 6px 20px rgb(0 0 0 / 45%);
+  --transition: 180ms cubic-bezier(.32, .72, .35, 1);
+
+  --sr-haut: env(safe-area-inset-top, 0px);
+  --sr-bas: env(safe-area-inset-bottom, 0px);
+
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--fond);
+  color: var(--texte);
+  font-family: 'Spectral', Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+h1, h2, h3, h4, .titre {
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 600;
+  letter-spacing: .02em;
+  margin: 0;
+}
+
+button { font: inherit; color: inherit; }
+svg { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.plein svg, .carte__element svg, .carte__cout svg { fill: currentColor; stroke: none; }
+img { display: block; max-width: 100%; }
+
+/* --- 2. Coque d'application ---------------------------------------------- */
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% -10%, #1b2330 0%, transparent 60%),
+    var(--fond);
+}
+
+.ecran {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: var(--sr-haut);
+  animation: apparition 240ms ease both;
+}
+
+.ecran__corps { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 16px 16px; }
+.ecran__corps::-webkit-scrollbar { width: 0; }
+
+.barre {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bord);
+  background: linear-gradient(180deg, rgb(255 255 255 / 4%), transparent);
+}
+.barre h2 { font-size: 1.05rem; flex: 1; }
+.barre__retour {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 0; padding: 8px; margin: -8px;
+  color: var(--texte-attenue); font-size: 1.1rem; cursor: pointer;
+}
+.barre__retour:active { color: var(--or); }
+
+.monnaie { display: flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; color: var(--or); font-size: .92rem; }
+.monnaie svg { width: .95em; height: .95em; }
+
+.bouton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 46px; padding: 0 20px;
+  border: 1px solid var(--or-sombre); border-radius: 10px;
+  background: linear-gradient(180deg, #2b3342, #1b212c);
+  color: var(--texte); font-family: 'Cinzel', serif; font-size: .95rem; letter-spacing: .03em;
+  cursor: pointer; transition: transform var(--transition), filter var(--transition);
+}
+.bouton:active { transform: translateY(1px) scale(.985); filter: brightness(1.15); }
+.bouton--primaire { background: linear-gradient(180deg, #d7b463, #a5813a); color: #1a1408; border-color: #e6cd90; font-weight: 700; }
+.bouton--fantome { background: none; border-color: var(--bord); color: var(--texte-attenue); }
+.bouton--danger { border-color: #7d3a38; color: #e79b98; }
+.bouton[disabled] { opacity: .42; pointer-events: none; }
+.bouton--bloc { width: 100%; }
+
+.vide { text-align: center; color: var(--texte-attenue); padding: 40px 20px; font-style: italic; }
+
+/* --- 3. La carte ---------------------------------------------------------- */
+
+.carte {
+  --coul: var(--neutre);
+  position: relative;
+  width: var(--cw, 168px);
+  aspect-ratio: 63 / 88;
+  font-size: calc(var(--cw, 168px) / 15);
+  flex: none;
+  border-radius: calc(var(--cw, 168px) / 22);
+  transition: transform var(--transition), box-shadow var(--transition);
+  will-change: transform;
+}
+.carte--sylve  { --coul: var(--sylve); }
+.carte--flamme { --coul: var(--flamme); }
+.carte--maree  { --coul: var(--maree); }
+.carte--foudre { --coul: var(--foudre); }
+.carte--roc    { --coul: var(--roc); }
+.carte--ombre  { --coul: var(--ombre); }
+.carte--neutre { --coul: var(--neutre); }
+
+/* Bord noir : celui de la carte physique, légèrement bombé. */
+.carte__bord {
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  padding: .42em;
+  background:
+    linear-gradient(160deg, #23262d 0%, #0c0e12 45%, #191c22 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 8%),
+    inset 0 -1px 3px rgb(0 0 0 / 60%),
+    var(--ombre-portee);
+}
+
+/* Cadre coloré par l'élément, avec un filet doré. */
+.carte__cadre {
+  position: absolute; inset: .42em;
+  border-radius: calc(var(--cw, 168px) / 32);
+  padding: .34em;
+  display: flex; flex-direction: column; gap: .26em;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--coul) 46%, #11141a) 0%,
+      color-mix(in srgb, var(--coul) 22%, #0e1117) 42%,
+      color-mix(in srgb, var(--coul) 34%, #0b0e13) 100%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--or) 40%, transparent),
+    inset 0 0 14px rgb(0 0 0 / 55%);
+  overflow: hidden;
+}
+
+.carte__entete {
+  display: flex; align-items: center; gap: .34em;
+  padding: 0 .1em;
+  min-height: 1.7em;
+}
+
+/* Gemme de coût : dégradé radial, reflet et ombre portée. */
+.carte__cout {
+  flex: none;
+  width: 1.65em; height: 1.65em;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  font-family: 'Cinzel', serif; font-weight: 700; font-size: .92em;
+  color: #12131a;
+  background:
+    radial-gradient(circle at 32% 26%, #fff 0%, #ffe9b0 22%, var(--or) 55%, #6f5620 100%);
+  box-shadow:
+    inset 0 -.12em .2em rgb(0 0 0 / 45%),
+    0 .08em .18em rgb(0 0 0 / 55%);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 35%);
+}
+
+.carte__nom {
+  flex: 1; min-width: 0;
+  font-size: .86em; line-height: 1.15;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #f6efdd;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+.carte__element {
+  flex: none; width: 1.3em; height: 1.3em;
+  display: grid; place-items: center;
+  color: color-mix(in srgb, var(--coul) 70%, #fff);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 60%));
+}
+.carte__element svg { width: 1.15em; height: 1.15em; }
+
+/* Fenêtre d'illustration, creusée dans le cadre. */
+.carte__art {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: .22em;
+  overflow: hidden;
+  background: #0b0e13;
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 70%),
+    inset 0 0 0 2px color-mix(in srgb, var(--or) 32%, transparent),
+    0 .1em .3em rgb(0 0 0 / 50%);
+}
+.carte__art img { width: 100%; height: 100%; object-fit: cover; }
+.carte__art::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(190deg, rgb(255 255 255 / 12%) 0%, transparent 38%);
+  pointer-events: none;
+}
+
+.carte__type {
+  display: flex; align-items: center; gap: .3em;
+  padding: .16em .45em;
+  border-radius: .16em;
+  font-size: .62em; letter-spacing: .02em;
+  color: #f0e6cd;
+  background: linear-gradient(180deg, rgb(0 0 0 / 55%), rgb(0 0 0 / 25%));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
+}
+.carte__type span:first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Gemme de rareté, à droite du bandeau de type. */
+.carte__rarete { flex: none; width: .58em; height: .58em; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 50%); }
+.carte--commune .carte__rarete      { background: radial-gradient(circle at 30% 30%, #cdd3dc, #6d737c); }
+.carte--peu-commune .carte__rarete  { background: radial-gradient(circle at 30% 30%, #9fe3a8, #2e7a44); }
+.carte--rare .carte__rarete         { background: radial-gradient(circle at 30% 30%, #9ad4ff, #1d5f9c); }
+.carte--epique .carte__rarete       { background: radial-gradient(circle at 30% 30%, #e0aaff, #6a2fa0); }
+.carte--legendaire .carte__rarete   { background: radial-gradient(circle at 30% 30%, #fff0b0, #c58a17); box-shadow: 0 0 .4em #ffcf5e; }
+
+/* Encart de règles : fond clair, texte encré. C'est ce contraste qui donne
+   l'impression d'un objet imprimé plutôt que d'une interface. */
+.carte__texte {
+  flex: 1; min-height: 0;
+  padding: .3em .42em;
+  border-radius: .18em;
+  overflow: hidden;
+  font-size: .60em; line-height: 1.28;
+  color: var(--encre);
+  background:
+    linear-gradient(180deg, var(--parchemin), var(--parchemin-2));
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 35%),
+    inset 0 .1em .3em rgb(120 100 60 / 30%);
+}
+.carte__texte p { margin: 0 0 .28em; }
+.carte__texte p:last-child { margin-bottom: 0; }
+.carte__motscles { font-family: 'Cinzel', serif; font-weight: 700; font-size: .95em; letter-spacing: .01em; }
+.carte__evolution { font-style: italic; opacity: .72; font-size: .92em; }
+.carte__citation {
+  font-style: italic; opacity: .66; font-size: .93em;
+  border-top: 1px solid rgb(42 35 23 / 22%);
+  padding-top: .22em; margin-top: .3em;
+}
+
+/* Médaillons d'attaque et de points de vie. */
+.carte__stats {
+  position: absolute; left: .1em; right: .1em; bottom: -.28em;
+  display: flex; justify-content: space-between; pointer-events: none;
+}
+.carte__atq, .carte__pv {
+  display: inline-flex; align-items: center; gap: .12em;
+  min-width: 1.9em; height: 1.6em; padding: 0 .3em;
+  border-radius: .5em;
+  font-family: 'Cinzel', serif; font-weight: 700; font-size: .82em;
+  color: #fff5e2;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 22%), 0 .1em .25em rgb(0 0 0 / 60%);
+}
+.carte__atq { background: linear-gradient(180deg, #9c3a2a, #5c1f14); }
+.carte__pv  { background: linear-gradient(180deg, #2f7a4a, #14401f); }
+.carte__atq svg, .carte__pv svg { width: .85em; height: .85em; opacity: .8; }
+
+/* Voile holographique des cartes rares et plus. */
+.carte__foil { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; }
+.carte--rare .carte__foil, .carte--epique .carte__foil, .carte--legendaire .carte__foil {
+  opacity: 1;
+  background: linear-gradient(115deg,
+    transparent 30%,
+    rgb(255 255 255 / 10%) 44%,
+    rgb(180 230 255 / 16%) 50%,
+    rgb(255 210 255 / 12%) 56%,
+    transparent 70%);
+  background-size: 260% 260%;
+  mix-blend-mode: screen;
+  animation: holo 5.5s ease-in-out infinite;
+}
+.carte--legendaire .carte__bord { box-shadow: inset 0 0 0 1px #f0d68a55, 0 0 16px #d7b46333, var(--ombre-portee); }
+
+.carte__compte {
+  position: absolute; top: -.4em; right: -.4em;
+  min-width: 1.8em; height: 1.8em; padding: 0 .4em;
+  display: grid; place-items: center;
+  border-radius: 1em; font-size: .72em; font-weight: 700;
+  background: var(--panneau-2); color: var(--or);
+  box-shadow: 0 0 0 1px var(--or-sombre), var(--ombre-portee);
+}
+
+.carte.est-inactive { filter: grayscale(.85) brightness(.5); }
+.carte.est-selectionnee { transform: translateY(-8px); box-shadow: 0 0 0 2px var(--or), 0 10px 26px rgb(0 0 0 / 60%); border-radius: calc(var(--cw, 168px) / 22); }
+.carte[role='button'] { cursor: pointer; }
+.carte[role='button']:active { transform: scale(.97); }
+
+/* --- 4. Le plateau -------------------------------------------------------- */
+
+.plateau {
+  flex: 1; min-height: 0;
+  display: grid;
+  /* Les lignes occupent une hauteur fixe proportionnée à la carte : sans cela
+     un plateau vide étire les cases sur tout l'écran et écrase la main. */
+  grid-template-rows: auto auto auto auto auto auto 1fr auto;
+  gap: 5px;
+  padding: 6px 8px calc(6px + var(--sr-bas));
+  background:
+    radial-gradient(90% 55% at 50% 50%, #1d2634 0%, #0c0f15 70%);
+}
+
+.heros {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--panneau), var(--panneau-2));
+  box-shadow: inset 0 0 0 1px var(--bord);
+}
+.heros.est-actif { box-shadow: inset 0 0 0 1px var(--or), 0 0 14px rgb(215 180 99 / 22%); }
+.heros__nom { flex: 1; font-family: 'Cinzel', serif; font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heros__pv, .heros__cristaux, .heros__pioche {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-variant-numeric: tabular-nums; font-size: .88rem; font-weight: 700;
+}
+.heros__pv { color: #7ed195; }
+.heros__cristaux { color: #8ec9ff; }
+.heros__pioche { color: var(--texte-attenue); font-weight: 400; font-size: .78rem; }
+.heros.est-ciblable { box-shadow: inset 0 0 0 2px var(--danger), 0 0 16px rgb(217 83 79 / 40%); cursor: pointer; }
+
+.lignes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; height: min(23vh, 168px); }
+
+.ligne {
+  position: relative;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  background: rgb(255 255 255 / 2.5%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 6%);
+  min-height: 0;
+}
+.ligne.est-libre { border: 1px dashed rgb(255 255 255 / 10%); box-shadow: none; }
+.ligne.est-posable { box-shadow: inset 0 0 0 2px var(--or); background: rgb(215 180 99 / 12%); cursor: pointer; animation: pulsation 1.5s ease-in-out infinite; }
+
+/* Jeton de créature : miniature de carte lisible d'un coup d'œil. */
+.jeton {
+  --coul: var(--neutre);
+  position: relative;
+  width: 100%; height: 100%;
+  border-radius: 9px; overflow: hidden;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--coul) 30%, #10141b), #0c0f15);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--coul) 50%, transparent), 0 2px 8px rgb(0 0 0 / 50%);
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+.jeton--sylve { --coul: var(--sylve); } .jeton--flamme { --coul: var(--flamme); }
+.jeton--maree { --coul: var(--maree); } .jeton--foudre { --coul: var(--foudre); }
+.jeton--roc { --coul: var(--roc); }     .jeton--ombre { --coul: var(--ombre); }
+.jeton--neutre { --coul: var(--neutre); }
+
+.jeton__art { position: absolute; inset: 0; }
+.jeton__art img { width: 100%; height: 100%; object-fit: cover; }
+.jeton__voile { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 34%, rgb(6 8 12 / 88%) 92%); }
+.jeton__nom {
+  position: absolute; left: 3px; right: 3px; bottom: 15px;
+  font-size: 9.5px; line-height: 1.1; text-align: center;
+  font-family: 'Cinzel', serif;
+  text-shadow: 0 1px 2px #000;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jeton__atq, .jeton__pv {
+  position: absolute; bottom: 2px;
+  min-width: 17px; height: 15px; padding: 0 3px;
+  display: grid; place-items: center;
+  border-radius: 5px; font-size: 10.5px; font-weight: 700;
+  font-family: 'Cinzel', serif; color: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+}
+.jeton__atq { left: 2px; background: linear-gradient(180deg, #a8402d, #5f2013); }
+.jeton__pv  { right: 2px; background: linear-gradient(180deg, #2f7a4a, #16401f); }
+.jeton__atq.est-boostee, .jeton__pv.est-boostee { box-shadow: 0 0 0 1px #ffe08a, 0 1px 3px #000; }
+.jeton__pv.est-blessee { background: linear-gradient(180deg, #b5462f, #5a1d10); }
+
+.jeton__mcs { position: absolute; top: 2px; left: 2px; display: flex; gap: 2px; }
+.jeton__mc { width: 14px; height: 14px; display: grid; place-items: center; border-radius: 4px; background: rgb(0 0 0 / 55%); color: #ffe6a8; }
+.jeton__mc svg { width: 10px; height: 10px; }
+.jeton__etats { position: absolute; top: 2px; right: 2px; display: flex; gap: 2px; }
+.jeton__etat { display: inline-flex; align-items: center; gap: 1px; height: 14px; padding: 0 3px; border-radius: 4px; font-size: 9px; font-weight: 700; background: rgb(0 0 0 / 62%); }
+.jeton__etat svg { width: 10px; height: 10px; }
+.jeton__etat--gel { color: #9fd8ff; }
+.jeton__etat--venin { color: #a8e06a; }
+.jeton__etat--bouclier { color: #d9d2ff; }
+
+.jeton.est-gelee .jeton__art { filter: saturate(.35) brightness(.75) hue-rotate(-12deg); }
+.jeton.est-gelee::after { content: ''; position: absolute; inset: 0; background: linear-gradient(140deg, rgb(150 210 255 / 26%), transparent 60%); pointer-events: none; }
+.jeton.est-prete { box-shadow: inset 0 0 0 2px #86e08a, 0 0 12px rgb(134 224 138 / 35%); cursor: pointer; }
+.jeton.est-attaquable { box-shadow: inset 0 0 0 2px var(--danger), 0 0 14px rgb(217 83 79 / 45%); cursor: pointer; animation: pulsation 1.2s ease-in-out infinite; }
+.jeton.est-ciblable { box-shadow: inset 0 0 0 2px var(--or); cursor: pointer; }
+.jeton.a-garde .jeton__art::after { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 2px rgb(255 226 150 / 45%); }
+
+.zone-active {
+  display: flex; flex: none; align-items: center; justify-content: center; gap: 8px;
+  min-height: 28px; padding: 3px 10px;
+  border-radius: 8px; font-size: .74rem; color: var(--texte-attenue);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 5%), transparent);
+}
+.zone-active b { color: var(--or); font-weight: 600; }
+
+/* Main : cartes chevauchées, la carte active se détache. */
+.main {
+  display: flex; justify-content: center; align-items: center;
+  min-height: 0; padding: 4px 0;
+}
+.main__piste { display: flex; justify-content: center; align-items: flex-end; }
+.main .carte { --cw: min(27vw, 112px); margin-inline: -14px; transform-origin: bottom center; }
+.main .carte:first-child { margin-left: 0; }
+.main .carte:last-child { margin-right: 0; }
+.main .carte.est-injouable { filter: brightness(.55) saturate(.6); }
+.main .carte.est-selectionnee { transform: translateY(-22px) scale(1.16); z-index: 5; }
+
+.actions { display: flex; gap: 8px; align-items: center; }
+.actions .bouton { flex: 1; min-height: 42px; }
+
+.pouvoir {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 10px;
+  background: linear-gradient(180deg, var(--panneau), var(--panneau-2));
+  box-shadow: inset 0 0 0 1px var(--bord);
+  font-size: .76rem; cursor: pointer;
+}
+.pouvoir.est-dispo { box-shadow: inset 0 0 0 1px var(--or); }
+.pouvoir[disabled] { opacity: .45; }
+.pouvoir__nom { font-family: 'Cinzel', serif; color: var(--or); }
+.pouvoir__cout { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; color: #8ec9ff; font-weight: 700; }
+
+/* Bandeau d'indication contextuelle. */
+.consigne {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 10px 18px; border-radius: 999px;
+  background: rgb(10 12 17 / 92%); box-shadow: 0 0 0 1px var(--or-sombre), var(--ombre-portee);
+  font-family: 'Cinzel', serif; font-size: 1rem; letter-spacing: .04em;
+  pointer-events: none; z-index: 40;
+  animation: banniere 1.2s ease both;
+}
+
+/* --- 5. Écrans ------------------------------------------------------------ */
+
+.accueil { display: flex; flex-direction: column; justify-content: center; gap: 22px; padding: 24px 22px calc(24px + var(--sr-bas)); text-align: center; }
+.accueil__logo { font-family: 'Cinzel', serif; font-size: clamp(2.4rem, 13vw, 3.6rem); font-weight: 700; letter-spacing: .16em; background: linear-gradient(180deg, #fff3cf, var(--or) 45%, #8a6c28); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.accueil__accroche { color: var(--texte-attenue); font-style: italic; margin-top: -14px; }
+.accueil__menu { display: grid; gap: 10px; }
+.accueil__pied { color: var(--texte-attenue); font-size: .76rem; display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+
+.grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 14px 10px; padding-top: 14px; }
+.grille .carte { --cw: 100%; width: 100%; }
+
+.filtres { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0; scrollbar-width: none; }
+.filtres::-webkit-scrollbar { display: none; }
+.puce {
+  flex: none; display: inline-flex; align-items: center; gap: 5px;
+  height: 34px; padding: 0 12px; border-radius: 17px;
+  border: 1px solid var(--bord); background: var(--panneau);
+  font-size: .8rem; color: var(--texte-attenue); cursor: pointer;
+}
+.puce.est-active { border-color: var(--or); color: var(--or); background: rgb(215 180 99 / 12%); }
+.puce svg { width: .95em; height: .95em; }
+
+.liste { display: grid; gap: 10px; padding-top: 14px; }
+.fiche {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px; border-radius: 12px; text-align: left;
+  border: 1px solid var(--bord); background: linear-gradient(180deg, var(--panneau), var(--panneau-2));
+  cursor: pointer; width: 100%;
+}
+.fiche.est-active { border-color: var(--or); }
+.fiche.est-verrouillee { opacity: .5; }
+.fiche__vignette { flex: none; width: 58px; height: 58px; border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 12%); }
+.fiche__vignette img { width: 100%; height: 100%; object-fit: cover; }
+.fiche__corps { flex: 1; min-width: 0; }
+.fiche__titre { font-family: 'Cinzel', serif; font-size: .95rem; }
+.fiche__detail { color: var(--texte-attenue); font-size: .8rem; line-height: 1.3; }
+.fiche__etat { flex: none; font-size: .78rem; color: var(--or); }
+
+.courbe { display: flex; align-items: flex-end; gap: 3px; height: 42px; padding-top: 8px; }
+.courbe__barre { flex: 1; background: linear-gradient(180deg, var(--or), var(--or-sombre)); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
+.courbe__barre span { position: absolute; bottom: -14px; left: 0; right: 0; text-align: center; font-size: .62rem; color: var(--texte-attenue); }
+
+.boosters { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; text-align: center; padding: 20px; }
+.paquet {
+  width: min(66vw, 250px); aspect-ratio: 63/88;
+  border-radius: 16px; cursor: pointer;
+  background:
+    radial-gradient(80% 50% at 50% 22%, rgb(255 236 180 / 30%), transparent 70%),
+    linear-gradient(160deg, #2b2140, #14101f 55%, #33254a);
+  box-shadow: inset 0 0 0 2px var(--or-sombre), inset 0 0 40px rgb(0 0 0 / 60%), 0 12px 34px rgb(0 0 0 / 60%);
+  display: grid; place-items: center;
+  font-family: 'Cinzel', serif; font-size: 1.3rem; letter-spacing: .2em; color: var(--or);
+  transition: transform var(--transition);
+}
+.paquet:active { transform: scale(.97); }
+.paquet.est-vide { opacity: .35; pointer-events: none; }
+
+.tirage { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 16px 0; }
+.tirage .carte { --cw: min(30vw, 132px); animation: revelation 480ms cubic-bezier(.2,.9,.3,1.3) both; }
+.tirage .carte:nth-child(2) { animation-delay: 90ms; }
+.tirage .carte:nth-child(3) { animation-delay: 180ms; }
+.tirage .carte:nth-child(4) { animation-delay: 270ms; }
+.tirage .carte:nth-child(5) { animation-delay: 360ms; }
+.tirage__doublon { position: absolute; inset: auto 0 -1.4em 0; text-align: center; font-size: .66em; color: var(--or); }
+
+/* Fiche détaillée d'une carte, en surimpression. */
+.modale {
+  position: fixed; inset: 0; z-index: 100;
+  display: grid; place-items: center;
+  padding: 22px;
+  background: rgb(5 6 9 / 82%);
+  backdrop-filter: blur(6px);
+  animation: apparition 180ms ease both;
+}
+.modale__contenu { max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.modale .carte { --cw: min(72vw, 300px); }
+.modale__actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+.fin {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: 28px; text-align: center;
+  background: rgb(5 6 9 / 90%); backdrop-filter: blur(8px);
+  animation: apparition 320ms ease both;
+}
+.fin__titre { font-size: 2.2rem; letter-spacing: .1em; }
+.fin__titre.est-victoire { color: var(--or); text-shadow: 0 0 24px rgb(215 180 99 / 45%); }
+.fin__titre.est-defaite { color: #a5aab5; }
+.fin__gain { color: var(--or); font-size: 1.05rem; }
+
+/* --- 6. Animations -------------------------------------------------------- */
+
+@keyframes apparition { from { opacity: 0; } to { opacity: 1; } }
+@keyframes banniere {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); }
+  18%, 74% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+}
+@keyframes pulsation { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
+@keyframes holo { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+@keyframes revelation {
+  from { opacity: 0; transform: translateY(24px) rotateY(38deg) scale(.9); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes degat {
+  0% { transform: translate(0, 0); } 25% { transform: translate(-4px, 2px); }
+  50% { transform: translate(4px, -2px); } 75% { transform: translate(-3px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes eclat-degat {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(.6); }
+  to { opacity: 0; transform: translate(-50%, -150%) scale(1.5); }
+}
+
+.anime-degat { animation: degat 320ms ease; }
+.nombre-volant {
+  position: fixed; z-index: 60; pointer-events: none;
+  font-family: 'Cinzel', serif; font-weight: 700; font-size: 1.6rem;
+  text-shadow: 0 2px 6px #000;
+  animation: eclat-degat 900ms ease-out forwards;
+}
+.nombre-volant--degat { color: #ff8a7a; }
+.nombre-volant--soin { color: #8ce4a0; }
+.nombre-volant--faiblesse { color: #ffd166; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
