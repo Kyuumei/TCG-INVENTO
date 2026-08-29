@@ -19,8 +19,16 @@ export function esc(s: string): string {
   );
 }
 
+/**
+ * Chemin de l'illustration d'une carte.
+ *
+ * Lorsque le jeu est empaqueté en fichier unique (voir `npm run bundle`), les
+ * images sont injectées en URI de données dans `globalThis.__ART` : la même
+ * fonction sert alors les deux modes de distribution.
+ */
 export function urlArt(id: string): string {
-  return `art/${id}.webp`;
+  const embarquees = (globalThis as { __ART?: Record<string, string> }).__ART;
+  return embarquees?.[id] ?? `art/${id}.webp`;
 }
 
 /** Ligne de type affichée sous l'illustration. */

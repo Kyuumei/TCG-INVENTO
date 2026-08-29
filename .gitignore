@@ -6,3 +6,4 @@ dist/
 .env.local
 /tools/.artcache/
 tests/__entree.ts
+invento.html
