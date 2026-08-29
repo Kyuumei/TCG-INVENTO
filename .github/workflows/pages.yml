@@ -1,8 +1,12 @@
 # Déploiement du jeu sur GitHub Pages.
 #
-# Prérequis, une seule fois : dans les réglages du dépôt, Pages → Source →
-# « GitHub Actions ». Le jeu est ensuite publié à chaque poussée sur la branche
-# de développement, à l'adresse https://<compte>.github.io/TCG-INVENTO/.
+# `enablement: true` active Pages tout seul à la première exécution : aucun
+# réglage manuel n'est nécessaire. Une limite subsiste toutefois côté GitHub —
+# Pages n'est disponible sur un dépôt **privé** qu'avec un plan payant. Sur un
+# compte gratuit, il faut rendre le dépôt public pour que la mise en ligne
+# aboutisse.
+#
+# Le jeu est publié à l'adresse https://<compte>.github.io/TCG-INVENTO/.
 #
 # Les illustrations sont versionnées dans public/art/ : le déploiement n'a donc
 # pas à les régénérer, et le rendu publié est exactement celui qui a été relu.
@@ -44,7 +48,12 @@ jobs:
       - name: Construire
         run: npm run build
 
-      - uses: actions/configure-pages@v5
+      - name: Activer et configurer Pages
+        uses: actions/configure-pages@v5
+        with:
+          # Crée le site Pages s'il n'existe pas encore, plutôt que d'exiger
+          # un passage préalable par les réglages du dépôt.
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
