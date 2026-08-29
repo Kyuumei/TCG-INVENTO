@@ -12,15 +12,41 @@ combat simultané).
 3. Lancer depuis l'icône : le jeu s'ouvre en plein écran, sans barre de
    navigateur, et fonctionne ensuite **sans connexion**.
 
+## Mettre en ligne
+
+Le dépôt contient un workflow GitHub Actions qui construit et publie le jeu à
+chaque poussée. **Une seule manipulation est nécessaire, une fois :** dans les
+réglages du dépôt, ouvrir **Pages** et choisir **Source → GitHub Actions**.
+
+Le jeu est alors publié sur `https://<compte>.github.io/TCG-INVENTO/`, et c'est
+cette adresse qu'il faut ouvrir dans Safari pour l'ajouter à l'écran d'accueil.
+
 ## Développement
 
 ```bash
 npm install
-npm run art      # génère les 158 illustrations dans public/art/
-npm run dev      # serveur local (accessible depuis le téléphone du réseau)
-npm run build    # build de production dans dist/
-npm test         # tests du moteur de règles
+npm run dev       # serveur local, accessible depuis le téléphone du réseau
+npm run build     # build de production dans dist/ (+ finalisation du service worker)
+npm test          # tests du moteur de règles
+npm run verifier  # parcours complet dans un navigateur, avec captures
+npm run bundle    # empaquette tout en un seul fichier invento.html
+
+npm run art       # régénère les 158 illustrations
+npm run icones    # régénère les icônes d'application
+npm run splash    # régénère les écrans de démarrage iOS
 ```
+
+## Hors ligne
+
+Le service worker met en cache deux ensembles distincts : le *socle*
+(HTML, CSS, JS, icônes), versionné à chaque déploiement, et le *média*
+(illustrations, polices), conservé d'une version à l'autre. Après le premier
+chargement, les 158 illustrations sont préchargées en tâche de fond, si bien
+que la collection entière reste consultable sans connexion.
+
+Quand une nouvelle version est déployée, le jeu ne l'installe jamais de
+lui-même — il propose un bandeau « Mettre à jour ». Cela évite de recharger
+l'application au milieu d'une partie.
 
 ## Le jeu
 

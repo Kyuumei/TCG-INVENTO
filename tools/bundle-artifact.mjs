@@ -39,7 +39,7 @@ html,body{height:100%;margin:0}
 ${feuille}
 </style>
 <div id="app"></div>
-<script>globalThis.__ART={${entrees.join(',')}};</script>
+<script>globalThis.__AUTONOME=true;globalThis.__ART={${entrees.join(',')}};</script>
 <script type="module">
 ${script}
 </script>

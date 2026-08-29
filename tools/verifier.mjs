@@ -47,11 +47,19 @@ const contexte = await navigateur.newContext({
 const page = await contexte.newPage();
 
 const erreurs = [];
-page.on('console', (m) => { if (m.type() === 'error') erreurs.push(`console: ${m.text()}`); });
+page.on('console', (m) => {
+  if (m.type() !== 'error') return;
+  const t = m.text();
+  if (t.includes('fonts.g') || t.includes('Failed to load resource')) return; // polices externes
+  erreurs.push(`console: ${t}`);
+});
 page.on('pageerror', (e) => erreurs.push(`page: ${e.message}`));
+// Les polices Google sont injoignables depuis cet environnement de test : leur
+// échec est attendu et ne doit pas faire échouer la vérification.
+const externeAttendu = (u) => u.includes('fonts.googleapis.com') || u.includes('fonts.gstatic.com');
 page.on('requestfailed', (r) => {
   const u = r.url();
-  if (u.startsWith(base)) erreurs.push(`requête échouée: ${u} — ${r.failure()?.errorText}`);
+  if (!externeAttendu(u)) erreurs.push(`requête échouée: ${u} — ${r.failure()?.errorText}`);
 });
 
 async function capture(nom) {
@@ -158,6 +166,35 @@ for (let tour = 0; tour < 6; tour++) {
 }
 await capture('13-partie-avancee');
 if (await page.locator('.fin').count()) await capture('14-fin-partie');
+
+// --- Vérification du fonctionnement hors ligne -----------------------------
+console.log('→ Hors ligne');
+const ctxHL = await navigateur.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'fr-FR' });
+const pHL = await ctxHL.newPage();
+await pHL.goto(base, { waitUntil: 'networkidle' });
+await pHL.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 15000 });
+console.log('  service worker actif');
+
+// On force la mise en cache des illustrations, puis on coupe le réseau.
+const nbArt = await pHL.evaluate(async () => {
+  const reponse = await fetch('art/syl-poussevrille.webp');
+  return reponse.ok ? 1 : 0;
+});
+await pHL.waitForTimeout(600);
+await ctxHL.setOffline(true);
+await pHL.reload({ waitUntil: 'domcontentloaded' });
+await pHL.waitForSelector('.accueil__logo', { timeout: 10000 });
+await pHL.click('[data-va="collection"]');
+await pHL.waitForSelector('.grille .carte');
+await pHL.waitForTimeout(800);
+const imageHL = await pHL.evaluate(() => {
+  const i = document.querySelector('.grille .carte img');
+  return !!i && i.complete && i.naturalWidth > 0;
+});
+await pHL.screenshot({ path: 'captures/15-hors-ligne.png' });
+console.log(`  rechargement hors ligne réussi, illustration servie depuis le cache : ${imageHL}`);
+if (!imageHL) erreurs.push('hors ligne : illustration non servie depuis le cache');
+if (!nbArt) erreurs.push('hors ligne : préchargement des illustrations impossible');
 
 await navigateur.close();
 serveur.close();

@@ -1,0 +1,62 @@
+# Déploiement du jeu sur GitHub Pages.
+#
+# Prérequis, une seule fois : dans les réglages du dépôt, Pages → Source →
+# « GitHub Actions ». Le jeu est ensuite publié à chaque poussée sur la branche
+# de développement, à l'adresse https://<compte>.github.io/TCG-INVENTO/.
+#
+# Les illustrations sont versionnées dans public/art/ : le déploiement n'a donc
+# pas à les régénérer, et le rendu publié est exactement celui qui a été relu.
+name: Déployer sur GitHub Pages
+
+on:
+  push:
+    branches: [main, claude/tcg-card-game-mobile-k7r25t]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Une seule mise en ligne à la fois ; on ne coupe pas un déploiement en cours.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  construire:
+    name: Construire
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Tester le moteur de règles
+        run: npm test
+
+      - name: Construire
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deployer:
+    name: Mettre en ligne
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - id: deploiement
+        uses: actions/deploy-pages@v4

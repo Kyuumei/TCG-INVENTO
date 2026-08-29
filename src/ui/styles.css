@@ -612,3 +612,28 @@ img { display: block; max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* --- 7. Bandeau système (mise à jour, installation, hors ligne) ------------ */
+
+.bandeau {
+  position: fixed; z-index: 200;
+  left: 12px; right: 12px; bottom: calc(12px + var(--sr-bas));
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--or-sombre);
+  background: rgb(16 20 28 / 96%);
+  box-shadow: var(--ombre-portee);
+  font-size: .85rem; line-height: 1.35;
+  animation: bandeau-entree 260ms cubic-bezier(.2,.9,.3,1.1) both;
+}
+.bandeau span { flex: 1; }
+.bandeau .bouton { min-height: 36px; padding: 0 14px; font-size: .82rem; }
+.bandeau__fermer {
+  flex: none; width: 28px; height: 28px;
+  border: 0; border-radius: 50%; background: none;
+  color: var(--texte-attenue); font-size: .9rem; cursor: pointer;
+}
+.bandeau__fermer:active { color: var(--texte); }
+
+@keyframes bandeau-entree { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
