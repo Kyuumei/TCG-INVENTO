@@ -495,11 +495,17 @@ img { display: block; max-width: 100%; }
 .plateau.est-occupe .main, .plateau.est-occupe .tiroir { opacity: .55; pointer-events: none; }
 
 /* Le champ réunit les deux rangées et la bande centrale : les trois colonnes
-   se lisent alors comme trois couloirs qui se font face. */
+   se lisent alors comme trois couloirs qui se font face.
+   La perspective est légère et volontairement discrète : il s'agit de suggérer
+   une table vue de trois quarts, pas de déformer des cartes qu'il faut lire. Le
+   CSS transforme aussi les zones cliquables, les touches restent donc justes. */
 .champ {
   position: relative;
   display: grid; grid-template-rows: 1fr auto 1fr; gap: 5px;
   padding: 5px 0; min-height: 0;
+  perspective: 1400px;
+  perspective-origin: 50% 42%;
+  transform-style: preserve-3d;
   border-radius: 12px;
   background:
     linear-gradient(90deg,
@@ -560,8 +566,19 @@ img { display: block; max-width: 100%; }
 .lignes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; min-height: 108px; border-radius: 10px; }
 /* Chaque camp a sa teinte de fond : c'est le repère le plus rapide pour savoir
    à qui appartient une ligne, avant même de regarder les créatures. */
-.lignes--adverse { background: linear-gradient(180deg, rgb(190 70 60 / 9%), transparent 72%); }
-.lignes--mienne  { background: linear-gradient(0deg, rgb(120 175 255 / 9%), transparent 72%); }
+.lignes--adverse {
+  background: linear-gradient(180deg, rgb(190 70 60 / 9%), transparent 72%);
+  /* La rangée adverse recule : elle est plus loin, elle paraît plus loin. */
+  /* Assez pour suggérer l'éloignement, pas assez pour brouiller les noms :
+     au-delà de cinq degrés, le texte transformé perd sa netteté. */
+  transform: rotateX(5deg) translateZ(-14px);
+  transform-origin: 50% 100%;
+}
+.lignes--mienne {
+  background: linear-gradient(0deg, rgb(120 175 255 / 9%), transparent 72%);
+  transform: rotateX(-2deg) translateZ(6px);
+  transform-origin: 50% 0%;
+}
 
 .ligne {
   position: relative;
@@ -739,7 +756,12 @@ img { display: block; max-width: 100%; }
   pointer-events: none;
 }
 /* Prête à attaquer : elle se soulève, comme une carte qu'on décolle du tapis. */
-.jeton.est-prete { transform: translateY(-3px); box-shadow: inset 0 -3px 0 0 #86e08a, 0 6px 14px rgb(0 0 0 / 60%), 0 0 12px rgb(134 224 138 / 35%); cursor: pointer; }
+.jeton.est-prete {
+  /* Une créature prête est décollée du tapis : on la voit avant de la lire. */
+  transform: translateZ(16px) translateY(-2px);
+  box-shadow: inset 0 -3px 0 0 #86e08a, 0 10px 20px rgb(0 0 0 / 60%), 0 0 12px rgb(134 224 138 / 35%);
+  cursor: pointer;
+}
 /* Cible d'attaque : un réticule, pas seulement une couleur. */
 .jeton.est-attaquable { box-shadow: 0 0 0 2px var(--danger), 0 0 18px rgb(217 83 79 / 50%); cursor: pointer; }
 .jeton.est-attaquable::after {
@@ -895,11 +917,8 @@ img { display: block; max-width: 100%; }
 .paquet.est-vide { opacity: .35; pointer-events: none; }
 
 .tirage { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 16px 0; }
-.tirage .carte { --cw: min(30vw, 132px); animation: revelation 480ms cubic-bezier(.2,.9,.3,1.3) both; }
-.tirage .carte:nth-child(2) { animation-delay: 90ms; }
-.tirage .carte:nth-child(3) { animation-delay: 180ms; }
-.tirage .carte:nth-child(4) { animation-delay: 270ms; }
-.tirage .carte:nth-child(5) { animation-delay: 360ms; }
+.tirage .retournable { --cw: min(32vw, 138px); width: var(--cw); }
+.retournable__face { width: 100%; }
 .tirage__doublon { position: absolute; inset: auto 0 -1.4em 0; text-align: center; font-size: .66em; color: var(--or); }
 
 /* Fiche détaillée d'une carte, en surimpression. */
@@ -937,10 +956,31 @@ img { display: block; max-width: 100%; }
 }
 @keyframes pulsation { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
 @keyframes holo { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-@keyframes revelation {
-  from { opacity: 0; transform: translateY(24px) rotateY(38deg) scale(.9); }
-  to { opacity: 1; transform: none; }
+/* Retournement : deux faces sur un même plan, l'arrière masqué. C'est
+   exactement ce qu'est une carte — inutile d'en faire un maillage. */
+.retournable { perspective: 1200px; }
+.retournable__plan {
+  position: relative; transform-style: preserve-3d;
+  transform: rotateY(180deg);
+  animation: retourner 620ms cubic-bezier(.34,.06,.2,1) forwards;
 }
+.retournable__face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.retournable__face--dos {
+  position: absolute; inset: 0;
+  transform: rotateY(180deg);
+  border-radius: 10px;
+}
+@keyframes retourner {
+  from { transform: rotateY(180deg) scale(.92); }
+  60%  { transform: rotateY(0deg) scale(1.06); }
+  to   { transform: rotateY(0deg) scale(1); }
+}
+.tirage .retournable:nth-child(2) .retournable__plan { animation-delay: 140ms; }
+.tirage .retournable:nth-child(3) .retournable__plan { animation-delay: 280ms; }
+.tirage .retournable:nth-child(4) .retournable__plan { animation-delay: 420ms; }
+.tirage .retournable:nth-child(5) .retournable__plan { animation-delay: 560ms; }
+/* Tant que le retournement n'a pas commencé, on ne voit que le dos. */
+.tirage .retournable:nth-child(n+2) .retournable__plan { animation-fill-mode: both; }
 @keyframes degat {
   0% { transform: translate(0, 0); } 25% { transform: translate(-4px, 2px); }
   50% { transform: translate(4px, -2px); } 75% { transform: translate(-3px, -1px); }
@@ -999,7 +1039,9 @@ img { display: block; max-width: 100%; }
 .calque-anim { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; }
 .fantome { position: absolute; transform-origin: center; will-change: transform, opacity; }
 .fantome > * { width: 100%; height: 100%; }
-.fantome .carte { --cw: 100%; width: 100%; }
+/* La largeur du fantôme est posée en pixels par le script : `--cw` reste donc
+   une longueur, ce qu'exige le calcul de la taille de police de la carte. */
+.fantome .carte { width: 100%; height: 100%; }
 .fantome--mort { filter: drop-shadow(0 0 14px rgb(255 120 90 / 55%)); }
 
 .onde {

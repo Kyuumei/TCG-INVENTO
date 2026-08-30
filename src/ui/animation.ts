@@ -39,6 +39,9 @@ function fantome(html: string, r: DOMRect, classe = ''): HTMLElement {
   el.style.top = `${r.top}px`;
   el.style.width = `${r.width}px`;
   el.style.height = `${r.height}px`;
+  // Les cartes se dimensionnent à partir de `--cw`, qui doit rester une
+  // longueur : on la fixe ici en pixels plutôt qu'en pourcentage.
+  el.style.setProperty('--cw', `${r.width}px`);
   el.innerHTML = html;
   obtenirCalque().appendChild(el);
   return el;

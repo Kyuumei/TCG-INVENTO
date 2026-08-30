@@ -6,7 +6,7 @@
  */
 import { barre, rafraichir, retour, sur, vibrer, type Ecran } from '../app';
 import { getCard } from '../../data/registry';
-import { htmlCarte } from '../carte';
+import { htmlCarte, htmlDos } from '../carte';
 import { ICONES } from '../icones';
 import { PRIX_BOOSTER, acheterBooster, charger, ouvrirBooster, sauver, type CarteTiree } from '../../save/profil';
 
@@ -21,7 +21,15 @@ export function ecranBoosters(): Ecran {
         .map((t) => {
           const def = getCard(t.id);
           if (!def) return '';
-          return `<div style="position:relative">${htmlCarte(def)}${t.doublon ? '<span class="tirage__doublon">doublon · +25</span>' : ''}</div>`;
+          // Chaque carte se retourne pour se révéler : c'est le geste que le
+          // joueur vient chercher en ouvrant un booster.
+          return `<div class="retournable" style="position:relative">
+            <div class="retournable__plan">
+              <div class="retournable__face">${htmlCarte(def)}</div>
+              <div class="retournable__face retournable__face--dos">${htmlDos()}</div>
+            </div>
+            ${t.doublon ? '<span class="tirage__doublon">doublon · +25</span>' : ''}
+          </div>`;
         })
         .join('');
       return `<div class="ecran__corps">
