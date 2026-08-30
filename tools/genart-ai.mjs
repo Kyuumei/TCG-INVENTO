@@ -82,10 +82,88 @@ const AMBIANCE = {
 // ---------------------------------------------------------------------------
 
 /**
+ * Vérifie qu'une réponse est bien une image et non une page d'erreur.
+ * Les services gratuits répondent volontiers en HTTP 200 avec du HTML quand
+ * ils sont saturés : sans ce contrôle, on écrirait une page web en .webp.
+ */
+async function octetsImage(reponse, nom) {
+  const type = reponse.headers.get('content-type') ?? '';
+  if (!reponse.ok) throw new Error(`${nom} ${reponse.status} : ${(await reponse.text()).slice(0, 200)}`);
+  if (!type.startsWith('image/')) {
+    throw new Error(`${nom} n'a pas renvoyé d'image (${type}) : ${(await reponse.text()).slice(0, 200)}`);
+  }
+  const buf = Buffer.from(await reponse.arrayBuffer());
+  if (buf.length < 2048) throw new Error(`${nom} : image tronquée (${buf.length} octets).`);
+  return buf;
+}
+
+/**
  * Chaque fournisseur reçoit une requête et renvoie les octets d'une image.
  * En ajouter un se résume à écrire une fonction de plus dans cette table.
  */
 const FOURNISSEURS = {
+  /**
+   * Pollinations — gratuit, sans compte ni clé. Une simple requête GET dont la
+   * réponse est directement l'image. C'est le chemin le plus court pour
+   * illustrer le set sans rien débourser ni configurer, au prix d'une file
+   * d'attente partagée : on y va doucement, une image à la fois.
+   */
+  async pollinations({ prompt, seed, modele }) {
+    const p = new URLSearchParams({
+      width: '1024',
+      height: '768',
+      seed: String(seed),
+      model: modele ?? 'flux',
+      nologo: 'true',
+      enhance: 'false',
+      referrer: 'invento',
+    });
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?${p}`;
+    return octetsImage(await fetch(url, { headers: { accept: 'image/*' } }), 'Pollinations');
+  },
+
+  /**
+   * Hugging Face — palier gratuit avec un jeton de compte, également gratuit.
+   * Le modèle peut être « froid » : le service répond alors 503 en annonçant un
+   * délai de chargement, que les reprises absorbent.
+   */
+  async huggingface({ prompt, seed, modele }) {
+    const jeton = process.env.HF_TOKEN;
+    if (!jeton) throw new Error('HF_TOKEN absent. Créez un jeton gratuit sur huggingface.co/settings/tokens.');
+    const m = modele ?? 'black-forest-labs/FLUX.1-schnell';
+    const r = await fetch(`https://api-inference.huggingface.co/models/${m}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json', accept: 'image/*' },
+      body: JSON.stringify({
+        inputs: prompt,
+        parameters: { width: 1024, height: 768, seed },
+        options: { wait_for_model: true },
+      }),
+    });
+    return octetsImage(r, 'Hugging Face');
+  },
+
+  /**
+   * Cloudflare Workers AI — palier gratuit quotidien, avec un compte gratuit.
+   * La réponse est un JSON contenant l'image encodée en base64.
+   */
+  async cloudflare({ prompt, seed, modele }) {
+    const compte = process.env.CF_ACCOUNT_ID;
+    const jeton = process.env.CF_API_TOKEN;
+    if (!compte || !jeton) throw new Error('CF_ACCOUNT_ID et CF_API_TOKEN sont requis.');
+    const m = modele ?? '@cf/black-forest-labs/flux-1-schnell';
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${compte}/ai/run/${m}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, steps: 4, seed }),
+    });
+    if (!r.ok) throw new Error(`Cloudflare ${r.status} : ${(await r.text()).slice(0, 200)}`);
+    const json = await r.json();
+    const b64 = json.result?.image;
+    if (!b64) throw new Error(`Cloudflare n'a renvoyé aucune image : ${JSON.stringify(json).slice(0, 200)}`);
+    return Buffer.from(b64, 'base64');
+  },
+
   /**
    * Replicate — le meilleur rapport qualité/prix pour un set entier.
    * Modèle par défaut : Flux Schnell, très bon marché ; `--modele` permet de
@@ -201,6 +279,21 @@ const FOURNISSEURS = {
 // Programme
 // ---------------------------------------------------------------------------
 
+/**
+ * Réglages par défaut par fournisseur. Les services gratuits partagent une
+ * file d'attente : y envoyer six requêtes en parallèle ne va pas plus vite, et
+ * déclenche des rejets. On y va donc une par une, avec une pause.
+ */
+const REGLAGES = {
+  pollinations: { parallele: 1, pause: 1500, essais: 5 },
+  huggingface: { parallele: 1, pause: 1200, essais: 6 },
+  cloudflare: { parallele: 2, pause: 400, essais: 4 },
+  replicate: { parallele: 2, pause: 0, essais: 4 },
+  openai: { parallele: 2, pause: 0, essais: 4 },
+  fal: { parallele: 3, pause: 0, essais: 4 },
+  local: { parallele: 1, pause: 0, essais: 3 },
+};
+
 function lireArgs() {
   const a = process.argv.slice(2);
   const val = (nom, defaut) => {
@@ -208,16 +301,19 @@ function lireArgs() {
     return t ? t.slice(nom.length + 3) : defaut;
   };
   return {
-    fournisseur: val('provider', 'replicate'),
+    fournisseur: val('provider', 'pollinations'),
     style: val('style', 'tcg'),
     modele: val('modele', undefined),
     seulement: val('only', undefined),
     element: val('element', undefined),
     limite: Number(val('limit', '0')) || 0,
-    parallele: Math.max(1, Number(val('parallele', '2')) || 2),
+    parallele: Number(val('parallele', '0')) || 0,
+    pause: Number(val('pause', '-1')),
     suffixe: val('suffixe', undefined),
     force: a.includes('--force'),
     dry: a.includes('--dry'),
+    boucle: a.includes('--boucle'),
+    essais: Number(val('essais', '0')) || 0,
   };
 }
 
@@ -245,7 +341,8 @@ async function avecReprises(fn, essais = 4) {
       return await fn();
     } catch (e) {
       erreur = e;
-      const attente = 2000 * 2 ** i;
+      if (i === essais - 1) break; // inutile d'attendre après la dernière
+      const attente = Math.min(30000, 2000 * 2 ** i);
       process.stdout.write(`    échec (${e.message.slice(0, 90)}) — nouvelle tentative dans ${attente / 1000} s\n`);
       await new Promise((r) => setTimeout(r, attente));
     }
@@ -253,27 +350,14 @@ async function avecReprises(fn, essais = 4) {
   throw erreur;
 }
 
-async function principal() {
-  const opt = lireArgs();
-  const generer = FOURNISSEURS[opt.fournisseur];
-  if (!generer) {
-    console.error(`Fournisseur inconnu : ${opt.fournisseur}. Disponibles : ${Object.keys(FOURNISSEURS).join(', ')}.`);
-    process.exit(1);
-  }
-
-  const dossier = join(process.cwd(), 'public', 'art');
-  await mkdir(dossier, { recursive: true });
-
-  const { TOUTES_LES_CARTES, TERRAINS } = await chargerDonnees();
-  let travaux = [
-    ...TOUTES_LES_CARTES.map((c) => ({ id: c.id, nom: c.nom, element: c.element, artPrompt: c.artPrompt, artSeed: c.artSeed })),
-    ...TERRAINS.map((t) => ({ id: t.id, nom: t.nom, element: t.element, artPrompt: t.artPrompt, artSeed: t.artSeed })),
-  ];
-
+/**
+ * Une passe de génération. Renvoie le nombre d'illustrations écrites, ce qui
+ * permet à la boucle de savoir si elle progresse encore.
+ */
+async function passe(opt, generer, reglage, parallele, pause, dossier, entrees) {
+  let travaux = entrees.slice();
   if (opt.seulement) travaux = travaux.filter((t) => t.id === opt.seulement);
   if (opt.element) travaux = travaux.filter((t) => t.element === opt.element);
-  // En mode --dry on veut pouvoir relire n'importe quelle requête, y compris
-  // celles des cartes déjà illustrées.
   if (!opt.force && !opt.dry) {
     const restant = [];
     for (const t of travaux) if (!(await existe(join(dossier, `${t.id}.webp`)))) restant.push(t);
@@ -281,14 +365,7 @@ async function principal() {
   }
   if (opt.limite) travaux = travaux.slice(0, opt.limite);
 
-  if (travaux.length === 0) {
-    console.log('Rien à générer. Utilisez --force pour régénérer des illustrations existantes.');
-    return;
-  }
-
-  console.log(`Fournisseur : ${opt.fournisseur}${opt.modele ? ` (${opt.modele})` : ''}`);
-  console.log(`Style       : ${opt.suffixe ? 'personnalisé' : opt.style}`);
-  console.log(`À générer   : ${travaux.length} illustration(s)\n`);
+  if (travaux.length === 0) return { faits: 0, echecs: 0, restants: 0 };
 
   if (opt.dry) {
     for (const t of travaux) {
@@ -296,22 +373,22 @@ async function principal() {
       console.log(`   ${construireRequete(t, opt.style, opt.suffixe)}\n`);
     }
     console.log('Mode --dry : aucune requête envoyée, aucun fichier écrit.');
-    return;
+    return { faits: 0, echecs: 0, restants: 0 };
   }
 
   let faits = 0;
   let echecs = 0;
-  const t0 = Date.now();
 
-  // On avance par petits lots : ces API limitent le débit, et un lot restreint
-  // rend l'interruption sans dégât.
-  for (let i = 0; i < travaux.length; i += opt.parallele) {
-    const lot = travaux.slice(i, i + opt.parallele);
+  for (let i = 0; i < travaux.length; i += parallele) {
+    const lot = travaux.slice(i, i + parallele);
     await Promise.all(
       lot.map(async (t) => {
         const prompt = construireRequete(t, opt.style, opt.suffixe);
         try {
-          const brut = await avecReprises(() => generer({ prompt, seed: t.artSeed % 2147483647, modele: opt.modele }));
+          const brut = await avecReprises(
+            () => generer({ prompt, seed: t.artSeed % 2147483647, modele: opt.modele }),
+            reglage.essais,
+          );
           const webp = await sharp(brut)
             .resize(SORTIE_L, SORTIE_H, { fit: 'cover', position: 'attention' })
             .webp({ quality: QUALITE, effort: 5 })
@@ -325,13 +402,75 @@ async function principal() {
         }
       }),
     );
+    // Les paliers gratuits n'aiment pas les rafales : on respire entre les lots.
+    if (pause > 0 && i + parallele < travaux.length) {
+      await new Promise((r) => setTimeout(r, pause));
+    }
+  }
+
+  return { faits, echecs, restants: travaux.length - faits };
+}
+
+async function principal() {
+  const opt = lireArgs();
+  const generer = FOURNISSEURS[opt.fournisseur];
+  if (!generer) {
+    console.error(`Fournisseur inconnu : ${opt.fournisseur}. Disponibles : ${Object.keys(FOURNISSEURS).join(', ')}.`);
+    process.exit(1);
+  }
+  const reglage = REGLAGES[opt.fournisseur] ?? { parallele: 2, pause: 0, essais: 4 };
+  const parallele = opt.parallele || reglage.parallele;
+  const pause = opt.pause >= 0 ? opt.pause : reglage.pause;
+  if (opt.essais) reglage.essais = opt.essais;
+
+  const dossier = join(process.cwd(), 'public', 'art');
+  await mkdir(dossier, { recursive: true });
+
+  const { TOUTES_LES_CARTES, TERRAINS } = await chargerDonnees();
+  const entrees = [
+    ...TOUTES_LES_CARTES.map((c) => ({ id: c.id, nom: c.nom, element: c.element, artPrompt: c.artPrompt, artSeed: c.artSeed })),
+    ...TERRAINS.map((t) => ({ id: t.id, nom: t.nom, element: t.element, artPrompt: t.artPrompt, artSeed: t.artSeed })),
+  ];
+
+  console.log(`Fournisseur : ${opt.fournisseur}${opt.modele ? ` (${opt.modele})` : ''}`);
+  console.log(`Style       : ${opt.suffixe ? 'personnalisé' : opt.style}`);
+  console.log(`Cadence     : ${parallele} en parallèle, ${pause} ms de pause`);
+  console.log(`Mode        : ${opt.boucle ? 'boucle jusqu’à complétion' : 'une passe'}\n`);
+
+  const t0 = Date.now();
+  let totalFaits = 0;
+  let tour = 0;
+
+  // Un service gratuit échoue régulièrement sans que ce soit grave : on
+  // repasse sur ce qui manque tant que l'on progresse. C'est ce qui rend la
+  // voie gratuite utilisable sans surveiller le terminal.
+  for (;;) {
+    tour++;
+    if (opt.boucle) console.log(`── passe ${tour}`);
+    const { faits, echecs, restants } = await passe(opt, generer, reglage, parallele, pause, dossier, entrees);
+    totalFaits += faits;
+
+    if (!opt.boucle || opt.dry) break;
+    if (restants === 0) {
+      console.log('\nToutes les illustrations demandées existent.');
+      break;
+    }
+    if (faits === 0) {
+      console.log(`\nAucune progression sur cette passe (${echecs} échec(s)). On s’arrête là.`);
+      console.log('Vérifiez la clé, le quota, ou relancez plus tard.');
+      break;
+    }
+    console.log(`   ${restants} restante(s), nouvelle passe…\n`);
+    await new Promise((r) => setTimeout(r, 3000));
   }
 
   const s = ((Date.now() - t0) / 1000).toFixed(0);
-  console.log(`\nTerminé : ${faits} générée(s), ${echecs} en échec, en ${s} s.`);
-  if (faits > 0) {
-    console.log('Relancez `npm run build` puis vérifiez le rendu avec `npm run verifier`.');
-    console.log('Pour revenir en arrière : `git checkout -- public/art`.');
+  if (!opt.dry) {
+    console.log(`\nTerminé : ${totalFaits} illustration(s) générée(s) en ${s} s.`);
+    if (totalFaits > 0) {
+      console.log('Relancez `npm run build`, puis `npm run verifier` pour contrôler le rendu.');
+      console.log('Pour revenir en arrière : `git checkout -- public/art`.');
+    }
   }
 }
 

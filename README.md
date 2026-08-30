@@ -151,15 +151,41 @@ carte 140 semblent venir de deux jeux différents.
 
 ### Choisir un fournisseur
 
-| Fournisseur | Variable | Coût des 158 cartes | Pour qui |
-|---|---|---|---|
-| `replicate` (défaut) | `REPLICATE_API_TOKEN` | ~0,50 € en Flux Schnell, ~6 € en Flux 1.1 Pro | Le meilleur rapport qualité/prix. À commencer par là. |
-| `openai` | `OPENAI_API_KEY` | ~6 € en qualité moyenne | La meilleure obéissance à une description longue et précise. |
-| `fal` | `FAL_KEY` | ~0,50 € | Équivalent à Replicate, plus rapide. |
-| `local` | `SD_URL` | gratuit | Automatic1111 ou Forge lancé avec `--api`. Seule voie pour imposer un style par LoRA. |
+**Gratuits**
+
+| Fournisseur | À fournir | Pour qui |
+|---|---|---|
+| `pollinations` (défaut) | rien | Aucun compte, aucune clé. Le chemin le plus court. File d'attente partagée, donc lent et parfois capricieux — c'est à cela que sert `--boucle`. |
+| `huggingface` | `HF_TOKEN` | Jeton gratuit sur huggingface.co. Meilleur choix de modèle, quota horaire. |
+| `cloudflare` | `CF_ACCOUNT_ID`, `CF_API_TOKEN` | Palier gratuit quotidien avec un compte gratuit. Rapide et stable. |
+| `local` | `SD_URL` | Automatic1111 ou Forge lancé avec `--api`. Gratuit et illimité si vous avez un GPU, et seule voie pour imposer un style par LoRA. |
+
+**Payants**
+
+| Fournisseur | À fournir | Coût des 158 cartes |
+|---|---|---|
+| `replicate` | `REPLICATE_API_TOKEN` | ~0,50 € en Flux Schnell, ~6 € en Flux 1.1 Pro |
+| `openai` | `OPENAI_API_KEY` | ~6 € en qualité moyenne |
+| `fal` | `FAL_KEY` | ~0,50 € |
 
 Midjourney donnerait le plus beau résultat mais n'expose pas d'API publique :
 il n'est pas automatisable ici.
+
+### La voie entièrement gratuite
+
+```bash
+npm run art:ai -- --limit=6          # six cartes, pour juger du style
+npm run art:ai -- --boucle           # les 158, en repassant sur les manquantes
+```
+
+`--boucle` relance des passes tant qu'elle progresse. Les illustrations déjà
+écrites ne sont jamais régénérées : un service gratuit qui échoue une fois sur
+trois finit donc quand même le set, sans qu'il faille surveiller le terminal.
+La boucle s'arrête d'elle-même si une passe entière échoue — quota épuisé,
+service indisponible — plutôt que de tourner dans le vide.
+
+Comptez plusieurs heures : Pollinations sert une file partagée et le script
+attend volontairement entre chaque image. Lancez-le et faites autre chose.
 
 ### Marche à suivre
 
@@ -167,9 +193,8 @@ il n'est pas automatisable ici.
 # 1. Lire les requêtes sans rien dépenser
 npm run art:ai -- --dry --limit=5
 
-# 2. Essayer six cartes pour juger du style
-export REPLICATE_API_TOKEN=...
-npm run art:ai -- --provider=replicate --limit=6 --force
+# 2. Essayer six cartes pour juger du style (gratuit, sans clé)
+npm run art:ai -- --limit=6 --force
 
 # 3. Comparer les styles disponibles sur une seule carte
 npm run art:ai -- --only=syl-yggravent --style=aquarelle --force
@@ -179,14 +204,15 @@ npm run art:ai -- --only=syl-yggravent --style=huile --force
 npm run art:ai -- --element=flamme --force
 
 # 5. Puis tout le set
-npm run art:ai -- --force
+npm run art:ai -- --boucle --force
 ```
 
 Styles disponibles : `tcg` (défaut), `aquarelle`, `huile`, `rendu`.
 `--suffixe="..."` remplace entièrement la directive par la vôtre.
 
 Options utiles : `--only=<id>`, `--element=<sylve|flamme|…>`, `--limit=N`,
-`--modele=<nom>`, `--parallele=N`, `--force`, `--dry`.
+`--modele=<nom>`, `--parallele=N`, `--pause=<ms>`, `--essais=N`, `--boucle`,
+`--force`, `--dry`.
 
 **Revenir en arrière** : les illustrations sont versionnées dans Git, donc
 `git checkout -- public/art` restaure l'état précédent, quoi qu'il arrive.
