@@ -522,6 +522,15 @@ img { display: block; max-width: 100%; }
 .heros__terrain svg { width: 1em; height: 1em; fill: currentColor; stroke: none; }
 .heros__pioche { display: inline-flex; align-items: center; gap: 3px; font-size: .74rem; color: var(--texte-attenue); font-variant-numeric: tabular-nums; }
 .heros__pioche i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .5; }
+.heros__prevision {
+  padding: 2px 7px; border-radius: 7px;
+  font-family: 'Cinzel', serif; font-weight: 700; font-size: .82rem;
+  color: #fff; background: #a8332b;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 25%), 0 0 12px rgb(217 83 79 / 55%);
+  animation: respire 1.2s ease-in-out infinite;
+}
+.heros__prevision.est-letale::after { content: ' FATAL'; font-size: .72em; letter-spacing: .06em; }
+
 .heros__pv {
   margin-left: auto;
   position: relative; display: inline-flex; align-items: center; gap: 4px;
@@ -675,6 +684,50 @@ img { display: block; max-width: 100%; }
 .jeton__etat--bouclier { color: #d9d2ff; }
 .jeton__etat--relique { color: #ffd79a; }
 
+/* Pastilles d'action : ce que cette créature permet de faire, maintenant.
+   Elles répondent à la question « et là, je peux quoi ? » sans détour. */
+.jeton__badges { position: absolute; right: 2px; bottom: 15px; display: flex; gap: 2px; }
+.jeton__badge {
+  width: 18px; height: 18px; display: grid; place-items: center;
+  border-radius: 5px; color: #fff;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 28%), 0 1px 3px rgb(0 0 0 / 70%);
+}
+.jeton__badge svg { width: 12px; height: 12px; }
+.jeton__badge--attaque {
+  background: linear-gradient(180deg, #4fbf6a, #237a3c);
+  animation: respire 1.6s ease-in-out infinite;
+}
+.jeton__badge--repos { background: linear-gradient(180deg, #5a6373, #333a46); color: #c3cbd8; }
+.jeton__badge--evolution {
+  background: linear-gradient(180deg, #e5c06a, #a3792a); color: #241a06;
+  animation: respire 1.6s ease-in-out infinite;
+}
+
+/* Une créature qui ne peut rien faire s'efface : elle ne réclame pas l'attention. */
+.jeton.est-endormie .jeton__art { filter: saturate(.55) brightness(.7); }
+/* Une évolution disponible, à l'inverse, la réclame. */
+.jeton.a-evolution { box-shadow: 0 0 0 2px rgb(229 192 106 / 80%), 0 0 14px rgb(229 192 106 / 40%); }
+
+/* Prévision de dégâts, posée sur la cible avant même de la toucher. */
+.jeton__prevision {
+  position: absolute; z-index: 4; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  pointer-events: none;
+  background: radial-gradient(60% 50% at 50% 50%, rgb(120 20 14 / 62%), transparent 75%);
+}
+.jeton__prevision > span {
+  font-family: 'Cinzel', serif; font-weight: 700; font-size: 22px; line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 4px #000, 0 2px 3px #000;
+}
+.jeton__prevision em { font-style: normal; font-size: .6em; vertical-align: super; color: #ffd166; }
+.jeton__letal {
+  padding: 1px 5px; border-radius: 4px;
+  font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: .08em;
+  color: #fff; background: #c0342c;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 70%);
+}
+
 /* Appartenance : liseré coloré sur le bord extérieur de chaque camp. */
 .jeton.est-adverse { box-shadow: inset 0 3px 0 0 rgb(214 92 80 / 90%), 0 3px 10px rgb(0 0 0 / 55%); }
 .jeton.est-mienne  { box-shadow: inset 0 -3px 0 0 rgb(120 175 255 / 90%), 0 3px 10px rgb(0 0 0 / 55%); }
@@ -782,6 +835,7 @@ img { display: block; max-width: 100%; }
 }
 
 @keyframes tiroir-entree { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes respire { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
 
 /* --- 5. Écrans ------------------------------------------------------------ */
 
@@ -936,3 +990,58 @@ img { display: block; max-width: 100%; }
 .bandeau__fermer:active { color: var(--texte); }
 
 @keyframes bandeau-entree { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+/* --- 8. Calque d'animation ------------------------------------------------ */
+
+/* Les fantômes se déplacent au-dessus de la page pendant que le plateau se
+   redessine dessous : c'est ce qui permet d'animer un élément qui, en réalité,
+   vient d'être détruit et recréé. */
+.calque-anim { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; }
+.fantome { position: absolute; transform-origin: center; will-change: transform, opacity; }
+.fantome > * { width: 100%; height: 100%; }
+.fantome .carte { --cw: 100%; width: 100%; }
+.fantome--mort { filter: drop-shadow(0 0 14px rgb(255 120 90 / 55%)); }
+
+.onde {
+  position: absolute;
+  width: 260px; height: 260px;
+  border: 3px solid currentColor; border-radius: 50%;
+  will-change: transform, opacity;
+}
+
+/* --- 9. Didacticiel -------------------------------------------------------- */
+
+.didact { position: fixed; inset: 0; z-index: 120; }
+
+/* Le projecteur est un simple rectangle dont l'ombre portée, démesurée,
+   assombrit tout le reste de l'écran : la découpe se fait sans masque. */
+.didact__projecteur {
+  position: absolute;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgb(4 6 10 / 78%), inset 0 0 0 2px var(--or);
+  transition: all 260ms cubic-bezier(.32,.72,.35,1);
+  pointer-events: auto; cursor: pointer;
+}
+.didact__projecteur[hidden] { display: none; }
+.didact__projecteur[hidden] ~ .didact__bulle { background: rgb(23 28 38 / 98%); }
+.didact:has(.didact__projecteur[hidden])::before {
+  content: ''; position: absolute; inset: 0; background: rgb(4 6 10 / 78%);
+}
+
+.didact__bulle {
+  position: absolute; left: 14px; right: 14px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--or-sombre);
+  background: linear-gradient(180deg, #232a37, #171c26);
+  box-shadow: 0 12px 34px rgb(0 0 0 / 60%);
+  animation: tiroir-entree 220ms cubic-bezier(.2,.9,.3,1.1) both;
+}
+.didact__compteur { font-size: .7rem; color: var(--or); letter-spacing: .08em; }
+.didact__titre { font-size: 1.05rem; margin: 4px 0 6px; }
+.didact__texte { margin: 0; font-size: .88rem; line-height: 1.45; color: var(--texte); }
+.didact__actions { display: flex; gap: 10px; margin-top: 14px; }
+.didact__actions .bouton { flex: 1; min-height: 42px; }
+
+.bouton--icone { min-width: 44px; padding: 0 12px; }
+.bouton--icone svg { width: 1.25em; height: 1.25em; }

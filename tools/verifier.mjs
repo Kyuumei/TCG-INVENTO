@@ -124,6 +124,20 @@ await page.waitForTimeout(500);
 await capture('10-mulligan');
 await page.click('[data-mulligan-valider]');
 await page.waitForSelector('.plateau');
+
+// Le didacticiel s'ouvre au tout premier combat : on le capture, puis on le
+// parcourt entièrement, ce qui vérifie au passage que chaque étape trouve sa
+// cible sur le plateau.
+if (await page.locator('.didact').count()) {
+  await page.waitForTimeout(400);
+  await capture('10b-didacticiel');
+  for (let i = 0; i < 12; i++) {
+    if (!(await page.locator('[data-suivant]').count())) break;
+    await page.click('[data-suivant]');
+    await page.waitForTimeout(120);
+  }
+  await page.waitForTimeout(300);
+}
 await page.waitForTimeout(900);
 await capture('11-plateau');
 

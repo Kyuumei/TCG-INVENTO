@@ -267,6 +267,38 @@ const ICONE_MOT_CLE: Partial<Record<Keyword, string>> = {
 };
 
 /**
+ * Pastilles d'action.
+ *
+ * Le joueur ne devrait jamais avoir à deviner ce qu'il peut faire : une
+ * créature prête porte une épée, une créature qui vient d'arriver porte un
+ * sablier, et celle dont l'évolution attend en main porte une flèche. C'est
+ * l'inverse du choix précédent, où tout reposait sur la couleur d'un liseré.
+ */
+function badges(o: { prete?: boolean; endormie?: boolean; evolutionDispo?: boolean }): string {
+  const items: string[] = [];
+  if (o.prete) items.push(`<span class="jeton__badge jeton__badge--attaque" title="Peut attaquer : touchez-la">${ICONES.attaque}</span>`);
+  if (o.endormie) items.push(`<span class="jeton__badge jeton__badge--repos" title="Ne peut pas attaquer ce tour-ci">${ICONES.repos}</span>`);
+  if (o.evolutionDispo) items.push(`<span class="jeton__badge jeton__badge--evolution" title="Une évolution attend dans votre main">${ICONES.evolution}</span>`);
+  return items.length ? `<div class="jeton__badges">${items.join('')}</div>` : '';
+}
+
+/**
+ * Prévision de dégâts, affichée sur chaque cible possible.
+ *
+ * Annoncer le résultat avant le geste supprime l'essentiel de l'hésitation :
+ * on voit du même coup combien on inflige, si le cycle élémentaire s'applique,
+ * et si le coup est fatal.
+ */
+function apercuDegats(p?: { degats: number; letal: boolean; faiblesse: boolean; resistance: boolean }): string {
+  if (!p) return '';
+  const marque = p.faiblesse ? '<em title="Faiblesse : dégâts majorés">▲</em>' : p.resistance ? '<em title="Résistance : dégâts réduits">▼</em>' : '';
+  return `<div class="jeton__prevision ${p.letal ? 'est-letale' : ''}" aria-label="${p.degats} dégâts prévus${p.letal ? ', coup fatal' : ''}">
+    ${p.letal ? '<b class="jeton__letal">FATAL</b>' : ''}
+    <span>−${p.degats}${marque}</span>
+  </div>`;
+}
+
+/**
  * Créature en jeu.
  *
  * Sur le plateau, une créature est une carte miniature et non un jeton
@@ -277,7 +309,18 @@ const ICONE_MOT_CLE: Partial<Record<Keyword, string>> = {
 export function htmlCreature(
   state: GameState,
   c: Creature,
-  o: { attaquable?: boolean; prete?: boolean; ciblable?: boolean; mien?: boolean } = {},
+  o: {
+    attaquable?: boolean;
+    prete?: boolean;
+    ciblable?: boolean;
+    mien?: boolean;
+    /** Ne peut pas encore attaquer : arrivée ce tour-ci, ou gelée. */
+    endormie?: boolean;
+    /** Une évolution de cette créature attend dans la main. */
+    evolutionDispo?: boolean;
+    /** Dégâts prévus si l'attaquant sélectionné la frappe. */
+    prevision?: { degats: number; letal: boolean; faiblesse: boolean; resistance: boolean };
+  } = {},
 ): string {
   const def = c.token ? null : getCard(c.defId);
   const st = statsOf(state, c);
@@ -307,6 +350,8 @@ export function htmlCreature(
     o.ciblable ? 'est-ciblable' : '',
     c.status.gel > 0 ? 'est-gelee' : '',
     part <= 0.34 ? 'est-affaiblie' : '',
+    o.endormie ? 'est-endormie' : '',
+    o.evolutionDispo ? 'a-evolution' : '',
     aMotCle(c, 'garde') ? 'a-garde' : '',
   ]
     .filter(Boolean)
@@ -324,6 +369,8 @@ export function htmlCreature(
       </div>
       <div class="jeton__mcs">${mc}</div>
       <div class="jeton__etats">${etats.join('')}</div>
+      ${badges(o)}
+      ${apercuDegats(o.prevision)}
       <div class="jeton__nom">${esc(nom)}</div>
       <span class="jeton__atq ${st.atq > base ? 'est-boostee' : ''}">${ICONES.attaque}${st.atq}</span>
     </div>

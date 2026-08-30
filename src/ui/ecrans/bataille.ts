@@ -20,6 +20,8 @@ import {
   ciblesPourCarte,
   createGame,
   peutAttaquer,
+  elementDe,
+  modulerDegats,
   peutEvoluerSur,
   statsOf,
   trouverCreature,
@@ -32,6 +34,8 @@ import { ICONE_ELEMENT, ICONES, LABEL_ELEMENT } from '../icones';
 import { consigneSelection, decrireAction } from '../journal';
 import { KEYWORD_LABEL } from '../../engine/types';
 import { pause, q, racineEcran, retour, sur, vibrer, type Ecran } from '../app';
+import { apparaitre, frapper, mourir, releverPositions, voler } from '../animation';
+import { ETAPES_COMBAT, boutonAide, didacticielDejaVu, lancerDidacticiel } from '../didacticiel';
 import { enregistrerResultat } from '../../save/profil';
 
 export interface ConfigBataille {
@@ -90,6 +94,14 @@ export function ecranBataille(config: ConfigBataille): Ecran {
 
   function htmlHeros(j: 0 | 1, ciblable: boolean): string {
     const p = etat.joueurs[j];
+    let prevision = '';
+    if (ciblable && selection?.type === 'creature') {
+      const att = trouverCreature(etat, selection.uid);
+      if (att) {
+        const d = statsOf(etat, att).atq;
+        prevision = `<span class="heros__prevision ${d >= p.pv ? 'est-letale' : ''}">−${d}</span>`;
+      }
+    }
     const terrain = getTerrain(p.terrainId);
     const actif = etat.actif === j && etat.phase === 'jeu';
     const partPv = Math.max(0, Math.min(1, p.pv / p.pvMax));
@@ -100,6 +112,7 @@ export function ecranBataille(config: ConfigBataille): Ecran {
         ${p.main.length}<i></i>${p.deck.length}
       </span>
       ${htmlCristaux(p.cristaux, Math.max(1, p.cristauxMax))}
+      ${prevision}
       <span class="heros__pv" title="Points de vie">
         <span class="heros__jauge"><i style="width:${partPv * 100}%"></i></span>
         ${ICONES.vie}${p.pv}
@@ -107,8 +120,43 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     </div>`;
   }
 
+  /**
+   * Créatures de la main dont une évolution peut se poser sur une créature en
+   * jeu. Sans ce repère, une évolution disponible reste invisible tant qu'on
+   * n'a pas touché la carte au hasard.
+   */
+  function evolutionsDisponibles(): Set<number> {
+    const out = new Set<number>();
+    if (etat.actif !== MOI || etat.phase !== 'jeu') return out;
+    const p = etat.joueurs[MOI];
+    for (const inst of p.main) {
+      const def = getCard(inst.defId);
+      if (!def || def.kind !== 'creature' || !def.evolueDe || def.cout > p.cristaux) continue;
+      for (const c of p.lignes) if (c && peutEvoluerSur(etat, def, c)) out.add(c.uid);
+    }
+    return out;
+  }
+
+  /** Dégâts que l'attaquant sélectionné infligerait à cette créature. */
+  function previsionContre(cible: import('../../engine/types').Creature) {
+    if (selection?.type !== 'creature') return undefined;
+    const att = trouverCreature(etat, selection.uid);
+    if (!att) return undefined;
+    const brut = statsOf(etat, att).atq;
+    const mod = modulerDegats(brut, elementDe(att), elementDe(cible));
+    const apresBouclier = Math.max(0, mod.valeur - cible.status.bouclier);
+    return {
+      degats: mod.valeur,
+      letal: apresBouclier >= statsOf(etat, cible).pv,
+      faiblesse: mod.faiblesse,
+      resistance: mod.resistance,
+    };
+  }
+
   function htmlLignes(j: 0 | 1, posables: number[], ciblables: Set<number>, attaquables: Set<number>): string {
     const p = etat.joueurs[j];
+    const evolutions = j === MOI ? evolutionsDisponibles() : new Set<number>();
+    const monTour = etat.actif === MOI && etat.phase === 'jeu';
     const cases: string[] = [];
     for (let l = 0; l < LIGNES; l++) {
       const c = p.lignes[l];
@@ -116,13 +164,20 @@ export function ecranBataille(config: ConfigBataille): Ecran {
       if (!c) {
         cases.push(`<div class="ligne est-libre ${posable ? 'est-posable' : ''}" data-ligne="${l}" data-cote="${j}"></div>`);
       } else {
-        const prete = j === MOI && etat.actif === MOI && peutAttaquer(etat, c) && !selection;
+        const prete = j === MOI && monTour && peutAttaquer(etat, c) && !selection;
+        // « Endormie » couvre les deux raisons de ne pas pouvoir attaquer :
+        // l'arrivée du tour même, et le gel.
+        const endormie =
+          j === MOI && monTour && !peutAttaquer(etat, c) && statsOf(etat, c).atq > 0 && c.attaquesFaites === 0;
         cases.push(
           `<div class="ligne" data-ligne="${l}" data-cote="${j}">${htmlCreature(etat, c, {
             mien: j === MOI,
             prete,
+            endormie,
+            evolutionDispo: evolutions.has(c.uid) && !selection,
             attaquable: attaquables.has(c.uid),
             ciblable: ciblables.has(c.uid),
+            prevision: attaquables.has(c.uid) ? previsionContre(c) : undefined,
           })}</div>`,
         );
       }
@@ -389,6 +444,7 @@ export function ecranBataille(config: ConfigBataille): Ecran {
         ${htmlMain()}
         <div class="actions">
           <button class="bouton bouton--fantome" data-quitter aria-label="Quitter la partie">Quitter</button>
+          ${boutonAide()}
           <button class="bouton bouton--primaire" data-fin-tour ${monTour && !occupe ? '' : 'disabled'}>
             ${occupe ? 'Tour adverse…' : monTour ? 'Fin du tour' : 'En attente'}
           </button>
@@ -445,8 +501,70 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     racineEl.innerHTML = html();
   }
 
-  function jouer(action: Action): void {
+  /**
+   * Lecture opaque de la phase. `appliquerAnime` réassigne `etat` derrière un
+   * `await`, ce que TypeScript ne voit pas : sans cette indirection il fige le
+   * type et refuse la comparaison suivante.
+   */
+  function partieTerminee(): boolean {
+    return etat.phase === 'termine';
+  }
+
+  type Positions = Map<number, { rect: DOMRect; html: string }>;
+
+  /**
+   * Animation d'intention, jouée *avant* la mutation : c'est le seul moment où
+   * la carte en main et la cible existent encore toutes les deux à l'écran.
+   */
+  async function animerIntention(action: Action, positions: Positions): Promise<void> {
+    const acteur = etat.actif;
+
+    if (action.type === 'attaquer') {
+      const el = q(racineEl, `[data-creature="${action.attaquantUid}"]`);
+      const cible =
+        action.cible === 'joueur'
+          ? q(racineEl, `[data-heros="${acteur === MOI ? IA : MOI}"]`)?.getBoundingClientRect()
+          : positions.get(action.cible)?.rect;
+      if (el && cible) await frapper(el, cible);
+      return;
+    }
+
+    if (!('uid' in action)) return;
+    const inst = etat.joueurs[acteur].main.find((c) => c.uid === action.uid);
+    const def = inst && getCard(inst.defId);
+    if (!def) return;
+
+    // La main de l'adversaire n'est pas rendue : on fait alors partir la carte
+    // de son bandeau, pour que son geste reste visible.
+    const source = q(racineEl, `[data-main-uid="${action.uid}"]`);
+    const depuis = source
+      ? source.getBoundingClientRect()
+      : q(racineEl, `[data-heros="${acteur}"]`)?.getBoundingClientRect();
+    if (!depuis) return;
+    const html = source ? source.outerHTML : htmlCarte(def, { compacte: true });
+
+    const cote = acteur === MOI ? 'mienne' : 'adverse';
+    let vers: DOMRect | undefined;
+    if (action.type === 'jouer-creature') {
+      vers = q(racineEl, `.lignes--${cote} .ligne[data-ligne="${action.ligne}"]`)?.getBoundingClientRect();
+    } else if ('cibleUid' in action && action.cibleUid !== undefined) {
+      vers = positions.get(action.cibleUid)?.rect;
+    } else {
+      vers = q(racineEl, '.bande')?.getBoundingClientRect();
+    }
+    if (vers) await voler(html, depuis, vers, { duree: 300, rotation: acteur === MOI ? 0 : 180 });
+  }
+
+  /**
+   * Applique une action en l'accompagnant de ses animations : élan d'attaque ou
+   * vol de la carte avant la mutation, puis morts et arrivées après.
+   */
+  async function appliquerAnime(action: Action): Promise<void> {
     const phrase = decrireAction(etat, action);
+    const positions = releverPositions(racineEl);
+
+    await animerIntention(action, positions);
+
     const apres = applyAction(etat, action);
     if (apres.journal.length === 0) {
       selection = null;
@@ -457,9 +575,33 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     selection = null;
     if (phrase) derniereAction = phrase;
     redessiner();
+
+    // Les créatures mortes sont rejouées depuis leur position d'avant : elles
+    // n'existent plus dans le DOM au moment où on veut les voir tomber.
+    for (const e of apres.journal) {
+      if (e.t !== 'mort') continue;
+      const p = positions.get(e.uid);
+      if (p) void mourir(p.html, p.rect);
+    }
+    for (const e of apres.journal) {
+      if (e.t !== 'invocation') continue;
+      const el = q(racineEl, `[data-creature="${e.uid}"]`);
+      if (el) apparaitre(el);
+    }
+
     animerJournal(apres.journal);
     vibrer(10);
     if (etat.phase === 'termine') terminer();
+  }
+
+  /** Point d'entrée des actions du joueur : refuse les gestes concurrents. */
+  function jouer(action: Action): void {
+    if (occupe) return;
+    occupe = true;
+    void appliquerAnime(action).finally(() => {
+      occupe = false;
+      if (etat.phase === 'jeu') redessiner();
+    });
   }
 
   async function finirTour(): Promise<void> {
@@ -485,15 +627,15 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     for (const action of suite) {
       if (annule) return;
       if (etat.phase !== 'jeu') break;
-      // La phrase se construit sur l'état d'avant : c'est le dernier moment où
-      // le nom de la carte jouée et celui de la cible sont encore connus.
-      const phrase = decrireAction(etat, action);
-      etat = applyAction(etat, action);
-      if (phrase) derniereAction = phrase;
-      redessiner();
-      animerJournal(etat.journal);
-      await pause(action.type === 'fin-tour' ? 180 : phrase ? 900 : 500);
-      if (etat.phase === 'termine') break;
+      if (action.type === 'fin-tour') {
+        etat = applyAction(etat, action);
+        redessiner();
+        await pause(180);
+        break;
+      }
+      await appliquerAnime(action);
+      await pause(520);
+      if (partieTerminee()) break;
     }
 
     occupe = false;
@@ -638,7 +780,26 @@ export function ecranBataille(config: ConfigBataille): Ecran {
         etat = applyAction(etat, { type: 'mulligan', rejeter: [...rejets] });
         rejets = new Set();
         redessiner();
-        banniere('À vous de jouer');
+        // Au tout premier combat, on désigne les commandes sur le plateau réel
+        // plutôt que de laisser le joueur les deviner.
+        if (!didacticielDejaVu()) {
+          occupe = true;
+          void lancerDidacticiel(ETAPES_COMBAT).then(() => {
+            occupe = false;
+            redessiner();
+            banniere('À vous de jouer');
+          });
+        } else {
+          banniere('À vous de jouer');
+        }
+      });
+
+      sur(r, '[data-aide]', 'click', () => {
+        occupe = true;
+        void lancerDidacticiel(ETAPES_COMBAT, { marquer: false }).then(() => {
+          occupe = false;
+          redessiner();
+        });
       });
 
       sur(r, '[data-main-uid]', 'click', (el) => toucherCarteMain(Number(el.dataset.mainUid)));
