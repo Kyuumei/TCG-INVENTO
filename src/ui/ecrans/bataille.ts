@@ -29,7 +29,7 @@ import {
 import type { GameEvent, GameState } from '../../engine/types';
 import { getCard, getTerrain } from '../../data/registry';
 import { jouerTourIA, type Difficulte } from '../../engine/ai';
-import { htmlCarte, htmlCreature, esc } from '../carte';
+import { htmlCarte, htmlCreature, htmlMainAdverse, htmlPile, esc } from '../carte';
 import { ICONE_ELEMENT, ICONES, LABEL_ELEMENT } from '../icones';
 import { consigneSelection, decrireAction } from '../journal';
 import { KEYWORD_LABEL } from '../../engine/types';
@@ -108,9 +108,8 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     return `<div class="heros ${actif ? 'est-actif' : ''} ${ciblable ? 'est-ciblable' : ''}" data-heros="${j}">
       <span class="heros__nom">${esc(p.nom)}</span>
       ${terrain ? `<span class="heros__terrain" title="${esc(terrain.nom)} — ${esc(terrain.passifTexte)}">${ICONE_ELEMENT[terrain.element]}</span>` : ''}
-      <span class="heros__pioche" title="${p.main.length} carte(s) en main, ${p.deck.length} dans le deck">
-        ${p.main.length}<i></i>${p.deck.length}
-      </span>
+      ${j === IA ? htmlMainAdverse(p.main.length) : ''}
+      ${htmlPile(p.deck.length, 'Deck')}
       ${htmlCristaux(p.cristaux, Math.max(1, p.cristauxMax))}
       ${prevision}
       <span class="heros__pv" title="Points de vie">

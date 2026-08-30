@@ -184,6 +184,15 @@ for (let tour = 0; tour < 6; tour++) {
     await page.waitForTimeout(320);
   }
   if (tour === 2) {
+    // On laisse les animations se terminer : une capture prise en plein vol
+    // photographie un fantôme et non le plateau.
+    await page.waitForTimeout(900);
+    const etat = await page.evaluate(() => ({
+      fantomes: document.querySelectorAll('.fantome').length,
+      didact: document.querySelectorAll('.didact').length,
+      occupe: document.querySelector('.plateau')?.classList.contains('est-occupe') ?? null,
+    }));
+    console.log(`  état au moment de la capture : ${JSON.stringify(etat)}`);
     await capture('12-plateau-en-cours');
     // Une carte sélectionnée : c'est l'état où le bandeau d'aperçu se montre.
     const c = page.locator('.main .carte:not(.est-injouable)');

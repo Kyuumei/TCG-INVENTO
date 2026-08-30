@@ -254,6 +254,43 @@ export function htmlCarte(def: CardDef, o: OptionsCarte = {}): string {
   </article>`;
 }
 
+/**
+ * Dos de carte.
+ *
+ * Le motif est dessiné en CSS, mais une image déposée dans `public/cadres/`
+ * prend le dessus si elle existe : la feuille de style empile la texture par
+ * dessus le dégradé, et le dégradé reste visible tant qu'elle est absente.
+ * Aucun test de présence n'est donc nécessaire au chargement.
+ */
+export function htmlDos(o: { compte?: number; etiquette?: string } = {}): string {
+  return `<div class="dos" aria-hidden="true">
+    ${o.compte !== undefined ? `<span class="dos__compte">${o.compte}</span>` : ''}
+    ${o.etiquette ? `<span class="dos__etiquette">${esc(o.etiquette)}</span>` : ''}
+  </div>`;
+}
+
+/**
+ * Pile de cartes : trois dos décalés, quel que soit le nombre réel. Une pile
+ * dit « il reste des cartes » ; le compte exact est écrit dessus.
+ */
+export function htmlPile(compte: number, etiquette: string): string {
+  const epaisseur = Math.min(3, compte);
+  const couches = Array.from({ length: Math.max(1, epaisseur) }, (_, i) => `<span class="pile__couche" style="--i:${i}"></span>`).join('');
+  return `<div class="pile ${compte === 0 ? 'est-vide' : ''}" title="${esc(etiquette)} : ${compte}">
+    ${couches}
+    <span class="pile__compte">${compte}</span>
+  </div>`;
+}
+
+/** Main adverse, en éventail de dos : elle donne le rythme de la partie. */
+export function htmlMainAdverse(n: number): string {
+  const cartes = Array.from({ length: Math.min(n, 8) }, (_, i) => {
+    const angle = (i - (Math.min(n, 8) - 1) / 2) * 5;
+    return `<span class="eventail__carte" style="--a:${angle}deg"></span>`;
+  }).join('');
+  return `<div class="eventail" aria-label="${n} carte(s) dans la main adverse">${cartes}</div>`;
+}
+
 // ---------------------------------------------------------------------------
 // Créature en jeu
 // ---------------------------------------------------------------------------

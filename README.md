@@ -89,6 +89,31 @@ Le moteur est **pur** : `applyAction(état, action)` renvoie un nouvel état et
 un journal d'événements que l'interface rejoue en animations. Tout le hasard
 passe par une graine, donc les parties sont reproductibles et testables.
 
+## Habiller les cartes avec ses propres textures
+
+Trois fichiers, déposés dans `public/cadres/`, remplacent le dessin fait en CSS :
+
+| Fichier | Rôle | Format |
+|---|---|---|
+| `dos.png` ou `dos.webp` | Dos de carte — piles de deck et main adverse | 630 × 880, opaque |
+| `cadre-<element>.png` | Cadre de la carte, un par élément | 630 × 880, **fenêtre d'illustration transparente** |
+| `holo.png` | Voile holographique des cartes rares | 630 × 880, à fondre en `screen` |
+
+Aucun code ne teste leur présence : la feuille de style empile simplement la
+texture par-dessus le dégradé, qui reste visible tant que le fichier manque.
+Déposer le fichier suffit donc à changer l'habillage, et le supprimer revient
+en arrière.
+
+```bash
+npm run art:gabarit   # écrit public/cadres/gabarit-cadre.png
+```
+
+Le gabarit montre, aux dimensions exactes, les zones réservées : illustration,
+titre et points de vie, bandeau d'évolution, texte de règles, ligne d'attaque,
+et pied Faiblesse / Résistance. Un cadre dessiné par-dessus s'intègre sans
+retouche. Les coordonnées sont aussi lisibles par un programme dans
+`public/cadres/geometrie.json`.
+
 ## Illustrer à la main, sans API
 
 Rien n'oblige à passer par une API : le jeu lit `public/art/<identifiant>.webp`,

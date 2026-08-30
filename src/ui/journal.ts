@@ -25,40 +25,52 @@ function nomCreature(etat: GameState, uid: number): string {
 }
 
 /**
+ * Conjugue au bon rang : le joueur est désigné par « Vous », qui appelle la
+ * deuxième personne du pluriel, alors que l'adversaire est à la troisième.
+ * Sans cela, le journal écrit « Vous lance Croissance Sauvage ».
+ */
+function conjuguer(estLeJoueur: boolean, troisieme: string, deuxieme: string): string {
+  return estLeJoueur ? deuxieme : troisieme;
+}
+
+/**
  * Renvoie la phrase décrivant une action, ou `null` pour les actions muettes
  * (la fin de tour a son propre bandeau).
  */
-export function decrireAction(etat: GameState, action: Action): string | null {
+export function decrireAction(etat: GameState, action: Action, pointDeVue: 0 | 1 = 0): string | null {
   const j = etat.actif;
   const acteur = etat.joueurs[j].nom;
   const cible = etat.joueurs[adversaire(j)].nom;
+  const moi = j === pointDeVue;
 
   switch (action.type) {
     case 'jouer-creature':
-      return `${acteur} invoque ${nomCarteEnMain(etat, j, action.uid)} en ligne ${action.ligne + 1}.`;
+      return `${acteur} ${conjuguer(moi, 'invoque', 'invoquez')} ${nomCarteEnMain(etat, j, action.uid)} en ligne ${action.ligne + 1}.`;
 
     case 'evoluer':
       return `${nomCreature(etat, action.cibleUid)} évolue en ${nomCarteEnMain(etat, j, action.uid)}.`;
 
     case 'jouer-sort': {
       const nom = nomCarteEnMain(etat, j, action.uid);
+      const lancer = conjuguer(moi, 'lance', 'lancez');
       return action.cibleUid !== undefined
-        ? `${acteur} lance ${nom} sur ${nomCreature(etat, action.cibleUid)}.`
-        : `${acteur} lance ${nom}.`;
+        ? `${acteur} ${lancer} ${nom} sur ${nomCreature(etat, action.cibleUid)}.`
+        : `${acteur} ${lancer} ${nom}.`;
     }
 
     case 'jouer-relique':
       return `${nomCreature(etat, action.cibleUid)} s'équipe de ${nomCarteEnMain(etat, j, action.uid)}.`;
 
     case 'jouer-zone':
-      return `${acteur} déploie ${nomCarteEnMain(etat, j, action.uid)}.`;
+      return `${acteur} ${conjuguer(moi, 'déploie', 'déployez')} ${nomCarteEnMain(etat, j, action.uid)}.`;
 
     case 'pouvoir-terrain': {
       const t = getTerrain(etat.joueurs[j].terrainId);
       const nom = t?.pouvoirNom ?? 'son terrain';
+      const activer = conjuguer(moi, 'active', 'activez');
       return action.cibleUid !== undefined
-        ? `${acteur} active ${nom} sur ${nomCreature(etat, action.cibleUid)}.`
-        : `${acteur} active ${nom}.`;
+        ? `${acteur} ${activer} ${nom} sur ${nomCreature(etat, action.cibleUid)}.`
+        : `${acteur} ${activer} ${nom}.`;
     }
 
     case 'attaquer': {
