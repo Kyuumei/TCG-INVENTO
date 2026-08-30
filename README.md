@@ -89,6 +89,62 @@ Le moteur est **pur** : `applyAction(état, action)` renvoie un nouvel état et
 un journal d'événements que l'interface rejoue en animations. Tout le hasard
 passe par une graine, donc les parties sont reproductibles et testables.
 
+## Remplacer les illustrations par de la génération IA
+
+Chaque carte porte un champ `artPrompt` décrivant sa scène. `npm run art:ai`
+en fait une requête complète — description, ambiance de l'élément, directive de
+style commune — l'envoie au fournisseur choisi, puis recadre et encode au même
+format que le rendu procédural.
+
+**La cohérence d'un set ne vient pas du modèle** mais de la directive de style
+partagée et de la graine déterministe. C'est ce qui évite que la carte 3 et la
+carte 140 semblent venir de deux jeux différents.
+
+### Choisir un fournisseur
+
+| Fournisseur | Variable | Coût des 158 cartes | Pour qui |
+|---|---|---|---|
+| `replicate` (défaut) | `REPLICATE_API_TOKEN` | ~0,50 € en Flux Schnell, ~6 € en Flux 1.1 Pro | Le meilleur rapport qualité/prix. À commencer par là. |
+| `openai` | `OPENAI_API_KEY` | ~6 € en qualité moyenne | La meilleure obéissance à une description longue et précise. |
+| `fal` | `FAL_KEY` | ~0,50 € | Équivalent à Replicate, plus rapide. |
+| `local` | `SD_URL` | gratuit | Automatic1111 ou Forge lancé avec `--api`. Seule voie pour imposer un style par LoRA. |
+
+Midjourney donnerait le plus beau résultat mais n'expose pas d'API publique :
+il n'est pas automatisable ici.
+
+### Marche à suivre
+
+```bash
+# 1. Lire les requêtes sans rien dépenser
+npm run art:ai -- --dry --limit=5
+
+# 2. Essayer six cartes pour juger du style
+export REPLICATE_API_TOKEN=...
+npm run art:ai -- --provider=replicate --limit=6 --force
+
+# 3. Comparer les styles disponibles sur une seule carte
+npm run art:ai -- --only=syl-yggravent --style=aquarelle --force
+npm run art:ai -- --only=syl-yggravent --style=huile --force
+
+# 4. Une fois le style choisi, lancer un élément entier
+npm run art:ai -- --element=flamme --force
+
+# 5. Puis tout le set
+npm run art:ai -- --force
+```
+
+Styles disponibles : `tcg` (défaut), `aquarelle`, `huile`, `rendu`.
+`--suffixe="..."` remplace entièrement la directive par la vôtre.
+
+Options utiles : `--only=<id>`, `--element=<sylve|flamme|…>`, `--limit=N`,
+`--modele=<nom>`, `--parallele=N`, `--force`, `--dry`.
+
+**Revenir en arrière** : les illustrations sont versionnées dans Git, donc
+`git checkout -- public/art` restaure l'état précédent, quoi qu'il arrive.
+
+Si une carte sort mal, corrigez son `artPrompt` dans `src/data/cards/` — c'est
+une seule ligne — puis relancez avec `--only=<id> --force`.
+
 ## Les illustrations
 
 Les 158 images de `public/art/` sont de **vrais fichiers WebP** (1,5 Mo au
