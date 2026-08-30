@@ -18,7 +18,8 @@
     "verifier": "node tools/verifier.mjs",
     "art:importer": "node tools/importer-art.mjs",
     "art:fiche": "node tools/genfiche.mjs",
-    "art:gabarit": "node tools/gengabarit.mjs"
+    "art:gabarit": "node tools/gengabarit.mjs",
+    "art:dos": "node tools/gendos.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
