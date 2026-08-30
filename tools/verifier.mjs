@@ -127,6 +127,19 @@ await page.waitForSelector('.plateau');
 await page.waitForTimeout(900);
 await capture('11-plateau');
 
+// Capture de l'état « carte sélectionnée » : c'est là que le bandeau d'aperçu
+// explique ce que fait la carte et quel geste est attendu.
+{
+  const c = page.locator('.main .carte:not(.est-injouable)');
+  if (await c.count()) {
+    await c.first().click();
+    await page.waitForTimeout(400);
+    await capture('11b-selection');
+    if (await page.locator('[data-annuler]').count()) await page.click('[data-annuler]');
+    await page.waitForTimeout(200);
+  }
+}
+
 // On joue quelques tours : poser une créature si possible, puis passer.
 for (let tour = 0; tour < 6; tour++) {
   const cartes = page.locator('.main .carte:not(.est-injouable)');
@@ -156,7 +169,18 @@ for (let tour = 0; tour < 6; tour++) {
     else if (await page.locator('[data-annuler]').count()) await page.click('[data-annuler]');
     await page.waitForTimeout(320);
   }
-  if (tour === 2) await capture('12-plateau-en-cours');
+  if (tour === 2) {
+    await capture('12-plateau-en-cours');
+    // Une carte sélectionnée : c'est l'état où le bandeau d'aperçu se montre.
+    const c = page.locator('.main .carte:not(.est-injouable)');
+    if (await c.count()) {
+      await c.first().click();
+      await page.waitForTimeout(350);
+      await capture('12b-selection');
+      if (await page.locator('[data-annuler]').count()) await page.click('[data-annuler]');
+      await page.waitForTimeout(200);
+    }
+  }
   if (await page.locator('.fin').count()) break;
   const finTour = page.locator('[data-fin-tour]:not([disabled])');
   if (!(await finTour.count())) break;

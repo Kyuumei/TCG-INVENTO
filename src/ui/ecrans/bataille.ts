@@ -21,13 +21,16 @@ import {
   createGame,
   peutAttaquer,
   peutEvoluerSur,
+  statsOf,
   trouverCreature,
 } from '../../engine/rules';
 import type { GameEvent, GameState } from '../../engine/types';
 import { getCard, getTerrain } from '../../data/registry';
 import { jouerTourIA, type Difficulte } from '../../engine/ai';
 import { htmlCarte, htmlCreature, esc } from '../carte';
-import { ICONES } from '../icones';
+import { ICONE_ELEMENT, ICONES, LABEL_ELEMENT } from '../icones';
+import { consigneSelection, decrireAction } from '../journal';
+import { KEYWORD_LABEL } from '../../engine/types';
 import { pause, q, racineEcran, retour, sur, vibrer, type Ecran } from '../app';
 import { enregistrerResultat } from '../../save/profil';
 
@@ -66,21 +69,41 @@ export function ecranBataille(config: ConfigBataille): Ecran {
   let occupe = false; // vrai pendant le tour de l'IA et ses animations
   let racineEl: HTMLElement;
   let annule = false;
+  /** Dernière action mise en mots, affichée au centre du champ de bataille. */
+  let derniereAction: string | null = null;
 
   // -------------------------------------------------------------------------
   // Rendu
   // -------------------------------------------------------------------------
 
+  /**
+   * Cristaux en pastilles plutôt qu'en fraction : on lit d'un coup d'œil ce
+   * qu'il reste à dépenser, sans avoir à faire la soustraction.
+   */
+  function htmlCristaux(dispo: number, max: number): string {
+    let pastilles = '';
+    for (let i = 0; i < max; i++) {
+      pastilles += `<i class="${i < dispo ? 'est-pleine' : ''}"></i>`;
+    }
+    return `<span class="cristaux" title="${dispo} cristaux disponibles sur ${max}">${pastilles}</span>`;
+  }
+
   function htmlHeros(j: 0 | 1, ciblable: boolean): string {
     const p = etat.joueurs[j];
     const terrain = getTerrain(p.terrainId);
     const actif = etat.actif === j && etat.phase === 'jeu';
+    const partPv = Math.max(0, Math.min(1, p.pv / p.pvMax));
     return `<div class="heros ${actif ? 'est-actif' : ''} ${ciblable ? 'est-ciblable' : ''}" data-heros="${j}">
       <span class="heros__nom">${esc(p.nom)}</span>
-      <span class="heros__pioche" title="Cartes en main et deck restant">${p.main.length} · ${p.deck.length}</span>
-      <span class="heros__cristaux" title="Cristaux">${ICONES.cristal}${p.cristaux}/${p.cristauxMax}</span>
-      <span class="heros__pv" title="Points de vie">${ICONES.vie}${p.pv}</span>
-      ${terrain ? `<span class="heros__terrain" title="${esc(terrain.nom)} — ${esc(terrain.passifTexte)}"></span>` : ''}
+      ${terrain ? `<span class="heros__terrain" title="${esc(terrain.nom)} — ${esc(terrain.passifTexte)}">${ICONE_ELEMENT[terrain.element]}</span>` : ''}
+      <span class="heros__pioche" title="${p.main.length} carte(s) en main, ${p.deck.length} dans le deck">
+        ${p.main.length}<i></i>${p.deck.length}
+      </span>
+      ${htmlCristaux(p.cristaux, Math.max(1, p.cristauxMax))}
+      <span class="heros__pv" title="Points de vie">
+        <span class="heros__jauge"><i style="width:${partPv * 100}%"></i></span>
+        ${ICONES.vie}${p.pv}
+      </span>
     </div>`;
   }
 
@@ -96,6 +119,7 @@ export function ecranBataille(config: ConfigBataille): Ecran {
         const prete = j === MOI && etat.actif === MOI && peutAttaquer(etat, c) && !selection;
         cases.push(
           `<div class="ligne" data-ligne="${l}" data-cote="${j}">${htmlCreature(etat, c, {
+            mien: j === MOI,
             prete,
             attaquable: attaquables.has(c.uid),
             ciblable: ciblables.has(c.uid),
@@ -103,14 +127,23 @@ export function ecranBataille(config: ConfigBataille): Ecran {
         );
       }
     }
-    return `<div class="lignes">${cases.join('')}</div>`;
+    return `<div class="lignes lignes--${j === MOI ? 'mienne' : 'adverse'}">${cases.join('')}</div>`;
   }
 
-  function htmlZone(): string {
-    if (!etat.zoneActive) return `<div class="zone-active">Aucune zone active</div>`;
-    const z = getCard(etat.zoneActive.defId);
-    if (!z) return `<div class="zone-active"></div>`;
-    return `<div class="zone-active">Zone : <b>${esc(z.nom)}</b> — ${esc(z.zone?.texte ?? '')}</div>`;
+  /**
+   * Bande centrale : elle sépare les deux camps et porte les trois informations
+   * qu'on cherche en permanence — à qui est le tour, quelle zone est active, et
+   * ce qui vient de se passer.
+   */
+  function htmlBande(): string {
+    const z = etat.zoneActive ? getCard(etat.zoneActive.defId) : null;
+    const zone = z
+      ? `<span class="bande__zone" title="${esc(z.zone?.texte ?? '')}">${ICONE_ELEMENT[z.element]}${esc(z.nom)}</span>`
+      : '';
+    const monTour = etat.actif === MOI && etat.phase === 'jeu';
+    const tour = `<span class="bande__tour ${monTour ? 'est-mien' : ''}">${monTour ? 'Votre tour' : `Tour de ${esc(etat.joueurs[IA].nom)}`}</span>`;
+    const action = derniereAction ? `<span class="bande__action">${esc(derniereAction)}</span>` : '';
+    return `<div class="bande">${tour}${zone}${action}</div>`;
   }
 
   function htmlMain(): string {
@@ -129,11 +162,16 @@ export function ecranBataille(config: ConfigBataille): Ecran {
         if (!def) return '';
         const injouable = monTour && !jouables.has(inst.uid);
         const choisie = selection?.type === 'main' && selection.uid === inst.uid;
+        const troppCher = def.cout > p.cristaux;
         return htmlCarte(def, {
           data: { 'main-uid': String(inst.uid) },
           interactive: true,
+          compacte: true,
           selectionnee: choisie,
-        }).replace('class="carte ', `class="carte ${injouable ? 'est-injouable ' : ''}`);
+        }).replace(
+          'class="carte ',
+          `class="carte ${injouable ? 'est-injouable ' : ''}${troppCher ? 'est-trop-chere ' : ''}`,
+        );
       })
       .join('');
     return `<div class="main"><div class="main__piste">${cartes}</div></div>`;
@@ -146,9 +184,105 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     const dispo = etat.actif === MOI && etat.phase === 'jeu' && !p.pouvoirUtilise && p.cristaux >= t.pouvoirCout && !occupe;
     const choisi = selection?.type === 'pouvoir';
     return `<button class="pouvoir ${dispo ? 'est-dispo' : ''} ${choisi ? 'est-selectionnee' : ''}" data-pouvoir ${dispo ? '' : 'disabled'}>
-      <span class="pouvoir__nom">${esc(t.pouvoirNom)}</span>
+      <span class="pouvoir__corps">
+        <span class="pouvoir__nom">${esc(t.pouvoirNom)}</span>
+        <span class="pouvoir__texte">${esc(t.pouvoirTexte)}</span>
+      </span>
       <span class="pouvoir__cout">${ICONES.cristal}${t.pouvoirCout}</span>
     </button>`;
+  }
+
+  /** Texte de règles complet d'une carte, pour le bandeau de sélection. */
+  function reglesDe(def: import('../../engine/types').CardDef): string {
+    const bouts: string[] = [];
+    if (def.motsCles?.length) bouts.push(def.motsCles.map((m) => KEYWORD_LABEL[m]).join(' · '));
+    if (def.equipement) {
+      const { atq, pv, motCle } = def.equipement;
+      bouts.push(`Équipée : ${atq >= 0 ? '+' : ''}${atq}/${pv >= 0 ? '+' : ''}${pv}${motCle ? ` et ${KEYWORD_LABEL[motCle]}` : ''}.`);
+    }
+    if (def.zone) bouts.push(def.zone.texte);
+    for (const c of def.capacites ?? []) if (c.texte) bouts.push(c.texte);
+    return bouts.join(' ');
+  }
+
+  /**
+   * Bandeau de sélection : il remplace le pouvoir de terrain dès qu'une carte
+   * ou une créature est choisie. C'est lui qui rend le jeu lisible — la carte
+   * en main est trop petite pour porter son texte, et rien n'indiquait
+   * jusqu'ici quel geste on attendait du joueur.
+   */
+  function htmlApercu(): string {
+    if (!selection) return '';
+
+    if (selection.type === 'pouvoir') {
+      const t = getTerrain(etat.joueurs[MOI].terrainId);
+      if (!t) return '';
+      return bandeauApercu(
+        t.pouvoirNom,
+        `Terrain — ${LABEL_ELEMENT[t.element]}`,
+        t.pouvoirTexte,
+        consigneSelection(t.pouvoirTarget === 'creature-alliee' ? 'cible-alliee' : t.pouvoirTarget === 'creature-ennemie' ? 'cible-ennemie' : 'cible-libre'),
+        null,
+      );
+    }
+
+    if (selection.type === 'creature') {
+      const c = trouverCreature(etat, selection.uid);
+      if (!c) return '';
+      const def = c.token ? null : getCard(c.defId);
+      const st = statsOf(etat, c);
+      return bandeauApercu(
+        def?.nom ?? c.token?.nom ?? '',
+        `${st.atq} attaque · ${st.pv} points de vie`,
+        def ? reglesDe(def) : '',
+        consigneSelection('attaque'),
+        def?.id ?? null,
+      );
+    }
+
+    const uidChoisi = selection.uid;
+    const inst = etat.joueurs[MOI].main.find((x) => x.uid === uidChoisi);
+    const def = inst && getCard(inst.defId);
+    if (!def) return '';
+
+    let consigne: string;
+    if (def.kind === 'creature' && !def.evolueDe) consigne = consigneSelection('ligne');
+    else if (def.kind === 'creature') consigne = consigneSelection('evolution');
+    else if (def.kind === 'relique') consigne = consigneSelection('cible-alliee');
+    else if (def.kind === 'zone') consigne = consigneSelection('jouer');
+    else {
+      const spec = def.capacites?.[0]?.target ?? 'aucune';
+      consigne =
+        spec === 'aucune' ? consigneSelection('jouer')
+        : spec === 'creature-alliee' ? consigneSelection('cible-alliee')
+        : spec === 'creature-ennemie' ? consigneSelection('cible-ennemie')
+        : consigneSelection('cible-libre');
+    }
+
+    const stats = def.kind === 'creature' ? `${def.atq}/${def.pv} · ` : '';
+    return bandeauApercu(
+      `${def.nom}`,
+      `${stats}${def.cout} cristaux`,
+      reglesDe(def),
+      consigne,
+      def.id,
+    );
+  }
+
+  function bandeauApercu(nom: string, sous: string, regles: string, consigne: string, artId: string | null): string {
+    const vignette = artId
+      ? `<span class="apercu__vignette"><img src="art/${artId}.webp" alt="" loading="lazy"></span>`
+      : '';
+    return `<div class="apercu">
+      ${vignette}
+      <span class="apercu__corps">
+        <span class="apercu__nom">${esc(nom)}</span>
+        <span class="apercu__sous">${esc(sous)}</span>
+        ${regles ? `<span class="apercu__regles">${esc(regles)}</span>` : ''}
+        <span class="apercu__consigne">${esc(consigne)}</span>
+      </span>
+      <button class="apercu__annuler" data-annuler aria-label="Annuler la sélection">✕</button>
+    </div>`;
   }
 
   function htmlMulligan(): string {
@@ -240,18 +374,21 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     const attaquablesEux = selection?.type === 'creature' ? new Set(ciblesEux) : new Set<number>();
     const monTour = etat.actif === MOI && etat.phase === 'jeu';
 
+    // Le champ regroupe les deux rangées et la bande centrale, pour que les
+    // trois lignes se lisent comme trois couloirs qui se font face.
     return `<div class="ecran">
-      <div class="plateau">
+      <div class="plateau ${occupe ? 'est-occupe' : ''}">
         ${htmlHeros(IA, herosCiblable)}
-        ${htmlLignes(IA, [], ciblesEux, attaquablesEux)}
-        ${htmlZone()}
-        ${htmlLignes(MOI, posables, ciblesMoi, new Set())}
+        <div class="champ">
+          ${htmlLignes(IA, [], ciblesEux, attaquablesEux)}
+          ${htmlBande()}
+          ${htmlLignes(MOI, posables, ciblesMoi, new Set())}
+        </div>
         ${htmlHeros(MOI, false)}
-        ${htmlPouvoir()}
+        <div class="tiroir">${selection ? htmlApercu() : htmlPouvoir()}</div>
         ${htmlMain()}
         <div class="actions">
-          <button class="bouton bouton--fantome" data-quitter>Quitter</button>
-          ${selection ? `<button class="bouton bouton--fantome" data-annuler>Annuler</button>` : ''}
+          <button class="bouton bouton--fantome" data-quitter aria-label="Quitter la partie">Quitter</button>
           <button class="bouton bouton--primaire" data-fin-tour ${monTour && !occupe ? '' : 'disabled'}>
             ${occupe ? 'Tour adverse…' : monTour ? 'Fin du tour' : 'En attente'}
           </button>
@@ -309,6 +446,7 @@ export function ecranBataille(config: ConfigBataille): Ecran {
   }
 
   function jouer(action: Action): void {
+    const phrase = decrireAction(etat, action);
     const apres = applyAction(etat, action);
     if (apres.journal.length === 0) {
       selection = null;
@@ -317,6 +455,7 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     }
     etat = apres;
     selection = null;
+    if (phrase) derniereAction = phrase;
     redessiner();
     animerJournal(apres.journal);
     vibrer(10);
@@ -327,6 +466,7 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     if (occupe || etat.actif !== MOI || etat.phase !== 'jeu') return;
     occupe = true;
     selection = null;
+    derniereAction = null;
     etat = applyAction(etat, { type: 'fin-tour' });
     redessiner();
     if (etat.phase === 'termine') {
@@ -345,10 +485,14 @@ export function ecranBataille(config: ConfigBataille): Ecran {
     for (const action of suite) {
       if (annule) return;
       if (etat.phase !== 'jeu') break;
+      // La phrase se construit sur l'état d'avant : c'est le dernier moment où
+      // le nom de la carte jouée et celui de la cible sont encore connus.
+      const phrase = decrireAction(etat, action);
       etat = applyAction(etat, action);
+      if (phrase) derniereAction = phrase;
       redessiner();
       animerJournal(etat.journal);
-      await pause(action.type === 'fin-tour' ? 180 : 600);
+      await pause(action.type === 'fin-tour' ? 180 : phrase ? 900 : 500);
       if (etat.phase === 'termine') break;
     }
 
@@ -357,6 +501,7 @@ export function ecranBataille(config: ConfigBataille): Ecran {
       terminer();
       return;
     }
+    derniereAction = null;
     redessiner();
     banniere('À vous de jouer');
   }
