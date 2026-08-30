@@ -89,6 +89,30 @@ Le moteur est **pur** : `applyAction(état, action)` renvoie un nouvel état et
 un journal d'événements que l'interface rejoue en animations. Tout le hasard
 passe par une graine, donc les parties sont reproductibles et testables.
 
+## Illustrer à la main, sans API
+
+Rien n'oblige à passer par une API : le jeu lit `public/art/<identifiant>.webp`,
+d'où que viennent ces fichiers. On peut donc générer les images une à une dans
+n'importe quel outil gratuit et les importer ensuite.
+
+```bash
+npm run art:fiche      # produit fiche-illustrations.html
+npm run art:importer -- --depuis=~/Downloads/invento --dry
+npm run art:importer -- --depuis=~/Downloads/invento
+```
+
+`npm run art:fiche` produit une page listant les 158 illustrations : pour
+chacune, le nom de fichier attendu, l'illustration actuelle en référence de
+cadrage, et la requête complète prête à copier. Elle suit l'avancement dans le
+stockage local du navigateur.
+
+`npm run art:importer` reprend un dossier de fichiers téléchargés — PNG, JPEG,
+WebP, n'importe quelle taille — les recadre en 512 × 384, les encode et les
+range sous le bon nom. **Le nom du fichier doit commencer par l'identifiant de
+la carte** ; `syl-yggravent.png`, `syl-yggravent (2).jpg` et
+`syl-yggravent-v3.webp` conviennent tous, donc aucun renommage manuel n'est
+nécessaire. Les fichiers non appariés sont signalés sans être importés.
+
 ## Remplacer les illustrations par de la génération IA
 
 Chaque carte porte un champ `artPrompt` décrivant sa scène. `npm run art:ai`
